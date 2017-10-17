@@ -7,7 +7,8 @@
 
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
-
+    https://github.com/chadmcox
+    
 .COMPANYNAME 
 
 .COPYRIGHT This Sample Code is provided for the purpose of illustration only and is not

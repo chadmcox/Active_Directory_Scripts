@@ -64,6 +64,9 @@ If ($(Try { Test-Path $default_log} Catch { $false })){Remove-Item $default_log 
 $i = 0
 $progress_total = ((get-adforest).domains).count
 $searched_namingContexts = @();$conflict_objects = @()
+$hash_domain = @{name='Domain';expression={$domain}}
+$hash_NamingContext = @{name='NamingContext';expression={$naming_context}}
+
 Foreach($domain in (get-adforest).domains)
 {
     $i++
@@ -75,8 +78,7 @@ Foreach($domain in (get-adforest).domains)
             write-debug "Scanning $($_) in $domain"
             $conflict_objects += Get-ADObject -LDAPFilter "(|(cn=*\0ACNF:*)(ou=*CNF:*))" -Properties whenchanged `
 				-searchbase $naming_context -server $domain |`
-                 Select-Object @{name='Domain';expression={$domain}},@{name='NamingContext';expression={$naming_context}},`
-                 Name,DistinguishedName,WhenChanged,ObjectGUID
+                 Select-Object $hash_domain,$hash_NamingContext,Name,DistinguishedName,WhenChanged,ObjectGUID
         }
     }
 }
@@ -92,5 +94,5 @@ Write-host -ForegroundColor yellow "Run the following to clean up the conflict o
 write-host "--------------------------------------------------------------------------------------"
 write-host 'import-csv'"$default_log"'| foreach{$og = ($_).objectguid; 
 get-adobject -filter {objectguid -eq $og} -Server ($_).domain -searchbase ($_).namingcontext | remove-adobject} 
-#consider testing with -whatif'
+#consider testing with -whatif at the end of the remove-adobject'
 write-host "--------------------------------------------------------------------------------------"

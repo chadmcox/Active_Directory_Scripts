@@ -106,7 +106,8 @@ function get-adobjectlocation{
             $splat_params = @{'ldapfilter' = "(|(objectclass=organizationalunit)(objectclass=domainDNS))";
                         'properties' = 'WhenChanged','whencreated','gPLink','gPOptions'
                         'server' = $domain}
-            $splat_select_params = @{'property' = $hash_domain,'Name','DistinguishedName','objectclass','WhenChanged','whencreated','gPLink','gPOptions'}
+            $splat_select_params = @{'property' = $hash_domain,'Name','DistinguishedName','objectclass','WhenChanged','whencreated',`
+                'gPLink','gPOptions'}
             
             $script:object_locations += Get-ADObject @splat_params | `
                 select-object @splat_select_params
@@ -142,7 +143,8 @@ function get-addomaincontrollersites{
 
             $splat_params = @{'filter' = '*';
                         'server' = $_domain}
-            $splat_select_params = @{'property' = 'Domain','Name','HostName','IPv4Address','Enabled','IsGlobalCatalog','OperatingSystem','site'}
+            $splat_select_params = @{'property' = 'Domain','Name','HostName','IPv4Address','Enabled','IsGlobalCatalog',`
+            'OperatingSystem','site'}
             
             Get-ADDomainController @splat_params | `
                 select-object @splat_select_params | export-csv $default_log -append -NoTypeInformation
@@ -168,9 +170,12 @@ function get-adsitedetails{
                     'properties' = 'siteObjectBL','description','whencreated','whenchanged','interSiteTopologyGenerator','gpLink';
                     'PipelineVariable' = 'site'}
         $splat_select_params = @{'property' = 'name',`
-                $(@{name='Subnet_Count';expression={$(([array]$site | Select-Object -ExpandProperty siteObjectBL).count)}}),`
-                $(@{name='DC_Count';expression={(@(Get-ADObject -Filter 'objectClass -eq "server"' -searchbase $(($site).DistinguishedName))).count}}),`
-                $(@{name='SiteLink_Count';expression={$sn = $(($site).name);(@(Get-ADReplicationSiteLink -Filter 'SitesIncluded -eq $sn')).count}}),`
+                $(@{name='Subnet_Count';expression={$(([array]$site |`
+                     Select-Object -ExpandProperty siteObjectBL).count)}}),`
+                $(@{name='DC_Count';expression={(@(Get-ADObject -Filter 'objectClass -eq "server"'`
+                     -searchbase $(($site).DistinguishedName))).count}}),`
+                $(@{name='SiteLink_Count';expression={$sn = $(($site).name);`
+                    (@(Get-ADReplicationSiteLink -Filter 'SitesIncluded -eq $sn')).count}}),`
                 'description',`
                 $(@{name='Address';expression={}}),
                 $(@{name='City';expression={}}),`
@@ -270,7 +275,8 @@ function get-adsubnetdetails{
                     'properties' = 'siteobject','whencreated','whenchanged';
                     'PipelineVariable' = 'subnet'}
         $splat_select_params = @{'property' = 'name',`
-                                        $(@{name='Site';expression={if($_.siteobject){($script:sites | where distinguishedname -eq $subnet.siteObject).name}else{$false}}}),`
+                                        $(@{name='Site';expression={if($_.siteobject){($script:sites |`
+                                             where distinguishedname -eq $subnet.siteObject).name}else{$false}}}),`
                                         'whencreated','whenchanged'}
                                         
         
@@ -301,7 +307,8 @@ function get-addcrepconnections{
                 $(@{name='Intersite';expression={if($(($_.ReplicateToDirectoryServer.split(","))[2] -replace "CN=")`
                      -ne $(($_.ReplicateFromDirectoryServer.split(","))[3] -replace "CN=")){$true}else{$false}}}),`
                 'whencreated','whenchanged','DistinguishedName'}
-        if(get-command get-adreplicationconnection){get-adreplicationconnection @splat_params | select-object @splat_select_params | sort name |`
+        if(get-command get-adreplicationconnection){get-adreplicationconnection @splat_params |`
+             select-object @splat_select_params | sort name |`
                 export-csv $default_log -NoTypeInformation}
     }
     end{}
@@ -320,7 +327,8 @@ function get-adcomputerdetails{
         write-Debug "Enumerating Computer"
         $prog_count = ($script:object_locations).count; $i = 0
         $script:object_locations | foreach {$domain = [string]$_.domain
-            Write-Progress -Activity "Enumerating Computers" -Status "Progress: $($_.DistinguishedName)" -PercentComplete ($I/$prog_count*100);$i++
+            Write-Progress -Activity "Enumerating Computers" -Status "Progress: $($_.DistinguishedName)"`
+                 -PercentComplete ($I/$prog_count*100);$i++
             $splat_params = @{'Filter' = {(isCriticalSystemObject -eq $False)};
                     'server' = $domain;
                     'Properties' = 'PwdLastSet','whencreated','SamAccountName','LastLogonTimeStamp',
@@ -358,7 +366,8 @@ function get-aduserdetails{
         write-Debug "Enumerating User"
         $prog_count = ($script:object_locations).count; $i = 0
         $script:object_locations | foreach {$domain = [string]$_.domain
-            Write-Progress -Activity "Enumerating Users" -Status "Progress: $($_.DistinguishedName)" -PercentComplete ($I/$prog_count*100);$i++
+            Write-Progress -Activity "Enumerating Users" -Status "Progress: $($_.DistinguishedName)"`
+                 -PercentComplete ($I/$prog_count*100);$i++
             $splat_params = @{'Filter' = '*';
                     'server' = $domain;
                     'Properties' = 'PwdLastSet','whencreated','WhenChanged','SamAccountName','LastLogonTimeStamp', `

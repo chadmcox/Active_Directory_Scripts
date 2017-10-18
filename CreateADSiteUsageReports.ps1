@@ -47,19 +47,19 @@ from the use or distribution of the Sample Code..
 
 .EXAMPLE
     To specify a default path
-    .\get-adsitestats.ps1 -default_path "c:\temp"
+    .\CreateADSiteUsageReports.ps1 -default_path "c:\temp"
 
    To store in the user's documents
-   .\get-adsitestats.ps1
+   .\CreateADSiteUsageReports.ps1
 
    To skip generating the user report
-   .\get-adsitestats.ps1 -skipusers
+   .\CreateADSiteUsageReports.ps1 -skipusers
 
    To skip generating the computer report
-   .\get-adsitestats.ps1 -skipcomputers
+   .\CreateADSiteUsageReports.ps1 -skipcomputers
 
    To skip generating the user and computer report
-   .\get-adsitestats.ps1 -skipcomputers -skipusers
+   .\CreateADSiteUsageReports.ps1 -skipcomputers -skipusers
 #>
 
 #Requires -Module ActiveDirectory

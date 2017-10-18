@@ -60,7 +60,7 @@ This Script finds all users with email proxy addresses defined and sip addresses
 #> 
 Param($path = "$env:USERPROFILE\Documents\")
 
-$results = "$($path)results_adusers_O365_discovery.csv"
+$results = "$($path)results_adusers_upn_match_smtp_sip.csv"
 $upn_cleanup = "$($path)results_upn_cleanup.csv"
 If ($(Try { Test-Path $results} Catch { $false })){Remove-Item $results -force}
 

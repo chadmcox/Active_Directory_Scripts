@@ -1,7 +1,6 @@
-
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID 5472afc8-ceed-4cb4-ba76-c4e0898b4aa3
 
@@ -80,6 +79,9 @@ Function validate-EmailCharacter{
     }
 }
 
+$hash_parentou = @{name='ParentOU';expression={`
+    $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
+
 #storing to an array so that the connection is kept open to the dc while the foreach is done to format the results.
 #the filter scope is to pull back user objects with proxyaddresses or sip skype addresses
 $users = get-aduser -filter {proxyaddresses -like "*" -or msRTCSIP-PrimaryUserAddress -like "*"} `
@@ -109,7 +111,8 @@ $final_users = $users | foreach{ $primary_email = $null
             @{name='State';expression={$_.st}}, `
             @{name='Country';expression={$_.c}}, `
             @{name='Country1';expression={$_.co}}, `
-            @{name='Country2';expression={$_.countryCode}}
+            @{name='Country2';expression={$_.countryCode}}, `
+            $hash_parentou
         }
 
 cls

@@ -53,7 +53,7 @@ This is to make sure the mail attribute.
 
 
 <# 
-
+'c','co','countrycode','l','streetaddress','st'
 .DESCRIPTION 
 This Script finds all users with email proxy addresses defined and sip addresses and checks to see if they match the upn of user objects.
 
@@ -84,7 +84,7 @@ Function validate-EmailCharacter{
 #the filter scope is to pull back user objects with proxyaddresses or sip skype addresses
 $users = get-aduser -filter {proxyaddresses -like "*" -or msRTCSIP-PrimaryUserAddress -like "*"} `
     -properties mail,userprincipalname,"msRTCSIP-UserEnabled",msExchRecipientTypeDetails,enabled,proxyaddresses,`
-        "msRTCSIP-PrimaryUserAddress",LockedOut,PasswordExpired
+        "msRTCSIP-PrimaryUserAddress",LockedOut,PasswordExpired,c,co,countrycode,l,streetaddress,st
 
 #originally had this go straight to csv but decided it was better to write to variable to create a final summary.
 $final_users = $users | foreach{ $primary_email = $null
@@ -104,7 +104,12 @@ $final_users = $users | foreach{ $primary_email = $null
             @{Name="SIPEnabled";Expression={if($_."msRTCSIP-UserEnabled"){$True}Else{$false}}},` 
             @{Name="SIPADDRESS";Expression={$_."msRTCSIP-PrimaryUserAddress"}},`
             @{Name="InvalidCharacterinPrimaryEmail";Expression={$(validate-EmailCharacter -emailaddress $primary_email)}},`
-            enabled,PasswordExpired,lockedout
+            enabled,PasswordExpired,lockedout,`
+            @{name='City';expression={$_.l}}, `
+            @{name='State';expression={$_.st}}, `
+            @{name='Country';expression={$_.c}}, `
+            @{name='Country1';expression={$_.co}}, `
+            @{name='Country2';expression={$_.countryCode}}
         }
 
 cls

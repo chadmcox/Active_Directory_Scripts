@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.3
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -88,6 +88,7 @@ get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
 
 #used for progress bar
 $count = ($domain_controllers_list).count; $i = 0
+cls
 
 While (($domain_controllers_list | measure).count -ne 0){
     Write-Progress -Activity "Active Directory Replication Convergence"`

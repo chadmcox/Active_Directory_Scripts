@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.4
+.VERSION 0.5
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -92,11 +92,12 @@ cls
 
 Measure-Command {
     While (($domain_controllers_list | measure).count -ne 0){
-        Write-Progress -Activity "Active Directory Replication Convergence"`
-         -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i)"`
-         -PercentComplete ($I/$count*100)
+        
         [System.Collections.ArrayList]$domain_controllers = {$domain_controllers_list}.invoke()
         foreach($domain_controller in ($domain_controllers | sort site)){
+            Write-Progress -Activity "Active Directory Replication Convergence"`
+                -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i), Scanning: $($domain_controller.hostname),"`
+                -PercentComplete ($I/$count*100)
             $query_time = get-date
             $replicated_value = (get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
                                     -server $($domain_controller.hostname)).wWWHomePage

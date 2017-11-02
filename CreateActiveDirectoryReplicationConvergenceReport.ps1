@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -68,6 +68,7 @@ If ($(Try { Test-Path $not_replicating_log} Catch { $false })){Remove-Item $not_
 
 #gather list of all domain controllers in the forest with domain and site information
 $domain_controllers_list = (get-adforest).domains | foreach{get-addomaincontroller -Filter * -server $_ | select domain,hostname,site}
+$domain_controllers_list = $domain_controllers_list | sort site, hostname
 
 #this is the object that gets changed, script watches this object on all DC's
 $object_dn = "CN=Sites,$((get-adrootdse).configurationNamingContext)"
@@ -94,7 +95,7 @@ Measure-Command {
     While (($domain_controllers_list | measure).count -ne 0){
         
         [System.Collections.ArrayList]$domain_controllers = {$domain_controllers_list}.invoke()
-        foreach($domain_controller in ($domain_controllers | sort site)){
+        foreach($domain_controller in ($domain_controllers)){
             Write-Progress -Activity "Active Directory Replication Convergence"`
                 -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i), Scanning: $($domain_controller.hostname),"`
                 -PercentComplete ($I/$count*100)

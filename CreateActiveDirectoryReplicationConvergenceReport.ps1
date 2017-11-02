@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.5
+.VERSION 0.6
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -121,6 +121,7 @@ Measure-Command {
         }
     }
 } | select @{name='Title';expression={"Total Convergence Time"}}, `
+        @{name='ObjectReplicated';expression={$object_dn}}, `
             @{name='Errors';expression={($domain_controllers_list | meassure).count}}, `
             @{name='Hours';expression={$_.hours}}, `
             @{name='Minutes';expression={$_.Minutes}}, `

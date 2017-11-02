@@ -65,11 +65,21 @@ $not_replicating_log = "$reportpath\report_domain_controller_failed_to_replicate
 If ($(Try { Test-Path $not_replicating_log} Catch { $false })){Remove-Item $not_replicating_log -force}
 
 [System.Collections.ArrayList]$domain_controllers_list = @();[System.Collections.ArrayList]$domain_controllers = @()
+
+#gather list of all domain controllers in the forest with domain and site information
 $domain_controllers_list = (get-adforest).domains | foreach{get-addomaincontroller -Filter * -server $_ | select domain,hostname,site}
+
+#this is the object that gets changed, script watches this object on all DC's
 $object_dn = "CN=Sites,$((get-adrootdse).configurationNamingContext)"
 $ad_partition = (get-adrootdse).configurationNamingContext
+
+#each loop will wait 5 seconds
 $SleepTimer = 5
+
+#random value that goes into the attribute
 $value = 1..1000 | get-random
+
+#this is the actual start time the script leverages to compare times
 $start_time = get-date
 
 #set value on current domains pdc
@@ -78,6 +88,7 @@ get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
 
 #used for progress bar
 $count = ($domain_controllers_list).count; $i = 0
+
 While (($domain_controllers_list | measure).count -ne 0){
     Write-Progress -Activity "Active Directory Replication Convergence"`
      -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i)"`
@@ -106,5 +117,5 @@ While (($domain_controllers_list | measure).count -ne 0){
     }
 }
 write-host "Report Can be found here $reportpath"
-import-csv $default_log | Out-GridView
+write-host "run to review the results: import-csv $default_log | Out-GridView"
 Write-Progress -Activity "Active Directory Replication Convergence" -Status "End" -Completed 

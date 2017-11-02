@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.4
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -74,7 +74,7 @@ $object_dn = "CN=Sites,$((get-adrootdse).configurationNamingContext)"
 $ad_partition = (get-adrootdse).configurationNamingContext
 
 #each loop will wait 5 seconds
-$SleepTimer = 5
+$SleepTimer = 1
 
 #random value that goes into the attribute
 $value = 1..1000 | get-random
@@ -90,33 +90,41 @@ get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
 $count = ($domain_controllers_list).count; $i = 0
 cls
 
-While (($domain_controllers_list | measure).count -ne 0){
-    Write-Progress -Activity "Active Directory Replication Convergence"`
-     -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i)"`
-     -PercentComplete ($I/$count*100)
-    [System.Collections.ArrayList]$domain_controllers = {$domain_controllers_list}.invoke()
-    foreach($domain_controller in $domain_controllers){
-        $query_time = get-date
-        $replicated_value = (get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
-                                -server $($domain_controller.hostname)).wWWHomePage
-        if($value -eq $replicated_value){$i++
-            $results = $domain_controller | select Domain,Hostname,Site,`
-                @{Name='TimeToReplicate';Expression ={$("{0:hh}:{0:mm}:{0:ss}" -f ($query_time-$start_time))}},`
-                @{Name='Value';Expression ={$value}}
-            $domain_controllers_list.remove($domain_controller) 
-            $results | export-csv $default_log -Append -NoTypeInformation
-            $results | fl
+Measure-Command {
+    While (($domain_controllers_list | measure).count -ne 0){
+        Write-Progress -Activity "Active Directory Replication Convergence"`
+         -Status "Time Passed: $("{0:hh}:{0:mm}:{0:ss}" -f ($(get-date)-$start_time)), Domain Controllers Remaining: $($count - $i)"`
+         -PercentComplete ($I/$count*100)
+        [System.Collections.ArrayList]$domain_controllers = {$domain_controllers_list}.invoke()
+        foreach($domain_controller in ($domain_controllers | sort site)){
+            $query_time = get-date
+            $replicated_value = (get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
+                                    -server $($domain_controller.hostname)).wWWHomePage
+            if($value -eq $replicated_value){$i++
+                $results = $domain_controller | select Domain,Hostname,Site,`
+                    @{Name='TimeToReplicate';Expression ={$("{0:hh}:{0:mm}:{0:ss}" -f ($query_time-$start_time))}},`
+                    @{Name='Value';Expression ={$value}}
+                $domain_controllers_list.remove($domain_controller) 
+                $results | export-csv $default_log -Append -NoTypeInformation
+                $results | Out-Host
+            }
+        }
+        Start-Sleep -seconds $SleepTimer;
+        if((get-date) -gt $($start_time + (New-TimeSpan -hours 1))){
+            #if time is greater than 1 hour stop script and report remaining domain controllers
+            write-host "following Domain Controllers did not replicate within 1 hour:"
+            $domain_controllers_list  | Out-Host
+            $domain_controllers_list | export-csv $default_log -Append -NoTypeInformation
+            #consider sending errors via email using send-mailmessage
+            break
         }
     }
-    Start-Sleep -seconds $SleepTimer;
-    if((get-date) -gt $($start_time + (New-TimeSpan -hours 1))){
-        #if time is greater than 1 hour stop script and report remaining domain controllers
-        write-host "following Domain Controllers did not replicate within 1 hour:"
-        $domain_controllers_list
-        $domain_controllers_list | export-csv $default_log -Append -NoTypeInformation
-        break
-    }
-}
+} | select @{name='Title';expression={"Total Convergence Time"}}, `
+            @{name='Errors';expression={($domain_controllers_list | meassure).count}}, `
+            @{name='Hours';expression={$_.hours}}, `
+            @{name='Minutes';expression={$_.Minutes}}, `
+            @{name='Seconds';expression={$_.Seconds}}
+
 write-host "Report Can be found here $reportpath"
 write-host "run to review the results: import-csv $default_log | Out-GridView"
 Write-Progress -Activity "Active Directory Replication Convergence" -Status "End" -Completed 

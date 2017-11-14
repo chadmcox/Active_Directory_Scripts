@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -87,7 +87,7 @@ Function ADUsersWithDoNotRequireKerbPreauth{
     [cmdletbinding()]
     param()
     process{
-        #DONT_REQ_PREAUTH
+        #DONT_REQ_PREAUTH  0x400000 4194304
         #This account does not require Kerberos pre-authentication for logging on.
 
         write-host "Starting Function ADUsersWithDoNotRequireKerbPreauth"
@@ -95,7 +95,7 @@ Function ADUsersWithDoNotRequireKerbPreauth{
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            $results += Get-ADUser -Filter {UserAccountControl -band 4194304} -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=4194304)(!(IsCriticalSystemObject=TRUE)))" -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -111,7 +111,7 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
     [cmdletbinding()]
     param()
     process{
-        #ENCRYPTED_TEXT_PWD_ALLOWED
+        #ENCRYPTED_TEXT_PWD_ALLOWED 0x0080 128
         #The user can send an encrypted password.
 
         write-host "Starting Function ADUsersWithStorePwdUsingReversibleEncryption"
@@ -119,7 +119,7 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            $results += Get-ADUser -Filter {UserAccountControl -band 128} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AllowReversiblePasswordEncryption -server $domain | `
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=128)(!(IsCriticalSystemObject=TRUE)))" -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AllowReversiblePasswordEncryption -server $domain | `
                     select $hash_domain, samaccountname,AllowReversiblePasswordEncryption,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -135,14 +135,14 @@ Function ADUserswithUseDESKeyOnly{
     [cmdletbinding()]
     param()
     process{
-        #USE_DES_KEY_ONLY
+        #USE_DES_KEY_ONLY 2097152
         
         write-host "Starting Function ADUserswithUseDESKeyOnly"
         $default_log = "$reportpath\report_ADUserswithUseDESKeyOnly.csv"
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            $results += Get-ADUser -Filter {UserAccountControl -band 2097152} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,UseDESKeyOnly -server $domain | `
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=2097152)(!(IsCriticalSystemObject=TRUE)))" -Properties admincount,enabled,PasswordExpired,PasswordLastSet,UseDESKeyOnly -server $domain | `
                     select $hash_domain, samaccountname,UseDESKeyOnly,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -166,7 +166,8 @@ Function ADUserswithUnConstrainedDelegationEnabled{
         
         foreach($domain in (get-adforest).domains){
             #Get-ADUser -Filter {UserAccountControl -band 524288}
-            $results += Get-ADUser -Filter {Trustedfordelegation -eq $True} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
+            #Get-ADUser -Filter {Trustedfordelegation -eq $True}
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=524288)(!(IsCriticalSystemObject=TRUE)))" -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
                     select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -182,14 +183,12 @@ Function ADUserswithPwdNotSet{
     [cmdletbinding()]
     param()
     process{
-        #TRUSTED_FOR_DELEGATION
         
         write-host "Starting Function ADUserswithPwdNotSet"
         $default_log = "$reportpath\report_ADUserswithPwdNotSet.csv"
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            #Get-ADUser -Filter {UserAccountControl -band 524288}
             $results += Get-ADUser -Filter {pwdLastSet -eq 0} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
                     select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
         }
@@ -203,12 +202,76 @@ Function ADUserswithPwdNotSet{
 }
 Function ADUserswithPwdNotRequired{
     #users_pwd_not_required
+    #PASSWD_NOTREQD 0x0020 32
+    [cmdletbinding()]
+    param()
+    process{
+    write-host "Starting Function ADUserswithPwdNotRequired"
+        $default_log = "$reportpath\report_ADUserswithPwdNotRequired.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            #Get-ADUser -Filter {UserAccountControl -band 32}
+            #Get-ADUser -Filter {PasswordNotRequired -eq $True}
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(IsCriticalSystemObject=TRUE)))"`
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,PasswordNotRequired -server $domain | `
+                    select $hash_domain, samaccountname,PasswordNotRequired,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user object with password not required."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
 }
 Function ADUserswithPwdNeverExpired{
     #users_pwd_never_expires
+    #DONT_EXPIRE_PASSWORD 0x10000 65536
+    [cmdletbinding()]
+    param()
+    process{
+
+        write-host "Starting Function ADUserswithPwdNeverExpired"
+        $default_log = "$reportpath\report_ADUserswithPwdNeverExpired.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            #Get-ADUser -Filter {UserAccountControl -band 65536}
+            #get-aduser -filter {PasswordNeverExpires -eq $true}
+            $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=65536)(!(IsCriticalSystemObject=TRUE)))" `
+                 -Properties admincount,enabled,PasswordNeverExpires,PasswordExpired,PasswordLastSet -server $domain | `
+                    select $hash_domain, samaccountname,PasswordNeverExpires,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user object with password not set."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
 }
 Function ADUserswithAdminCount{
     #users_with_admincount
+    [cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserswithAdminCount"
+        $default_log = "$reportpath\report_ADUserswithAdminCount.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            
+            $results += get-aduser -Filter {admincount -eq 1} -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user object with password not set."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
 }
 Function ADUserswithStaleAdminCount{
     #users with stale admin count
@@ -251,5 +314,8 @@ ADUsersWithStorePwdUsingReversibleEncryption
 ADUserswithUseDESKeyOnly
 ADUserswithUnConstrainedDelegationEnabled
 ADUserswithPwdNotSet
+ADUserswithPwdNeverExpired
+ADUserswithPwdNotRequired
+ADUserswithAdminCount
 
 write-host "Report Can be found here $reportpath"

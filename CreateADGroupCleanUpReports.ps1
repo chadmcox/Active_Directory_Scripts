@@ -282,6 +282,7 @@ function ADGroupsNeverUsed{
 function ADGroupswithMembershipLastChange{
     [cmdletbinding()]
     param()
+
     process{
         write-host "Starting Function ADGroupswithMembershipLastChange"
         $default_log = "$reportpath\report_ADGroupswithMembershipLastChange.csv"
@@ -340,3 +341,4 @@ ADGroupsWithSIDHistoryFromSameDomain
 ADGroupsWithStaleAdminCount
 ADGroupsNeverUsed
 ADGroupswithMembershipLastChange
+ADGroupsAssignedbyAMACertificate

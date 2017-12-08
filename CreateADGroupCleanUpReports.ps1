@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -301,6 +301,26 @@ function ADGroupswithMembershipLastChange{
             write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
         }
     }
+}
+
+function ADGroupsAssignedbyAMACertificate{
+    param()
+    Process{
+        #Authentication Mechanism Assurance https://technet.microsoft.com/en-us/library/dd378897(v=ws.10).aspx
+        #https://blogs.technet.microsoft.com/askds/2011/02/25/friday-mail-sack-no-redesign-edition/#amapki
+        write-host "Starting Function ADGroupsAssignedbyAMACertificate"
+        $default_log = "$reportpath\report_ADGroupsAssignedbyAMACertificate.csv"
+        $results = @()
+    
+        $results = get-adobject -filter {objectclass -eq "msPKI-Enterprise-Oid"} -searchbase $(get-adrootdse).configurationnamingcontext -properties * | where {($_."msDS-OIDToGroupLink")} | select DisplayName, msDS-OIDToGroupLink,DistinguishedName,whenChanged,whenCreated 
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) Groups defined in the msDS-OIDToGroupLink attribute of a certificate object."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
+        }
+    }
+
 }
 
 #region hash calculated properties

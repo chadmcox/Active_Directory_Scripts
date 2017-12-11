@@ -47,7 +47,7 @@ from the use or distribution of the Sample Code..
 #>
 
 #Requires -Module ActiveDirectory
-
+#Requires -version 3.0
 <# 
 
 .DESCRIPTION 
@@ -282,7 +282,6 @@ function ADGroupsNeverUsed{
 function ADGroupswithMembershipLastChange{
     [cmdletbinding()]
     param()
-
     process{
         write-host "Starting Function ADGroupswithMembershipLastChange"
         $default_log = "$reportpath\report_ADGroupswithMembershipLastChange.csv"
@@ -336,9 +335,9 @@ $hash_lastmemchange = @{name='MembershipLastChanged';expression={($_ | Select-Ob
 cls
 ADPrivilegedGroupsWithSidHistory
 ADGroupsWithNoMembers
-ADGroupsWithCircularNesting
 ADGroupsWithSIDHistoryFromSameDomain
 ADGroupsWithStaleAdminCount
 ADGroupsNeverUsed
 ADGroupswithMembershipLastChange
 ADGroupsAssignedbyAMACertificate
+ADGroupsWithCircularNesting

@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.5
+.VERSION 0.6
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -208,8 +208,8 @@ function ADGroupsWithSIDHistoryFromSameDomain{
     process{
         $function_list += "ADGroupsWithSIDHistoryFromSameDomain"
         #https://adsecurity.org/?p=1772
-        write-host "Starting Function ADUsersWithSIDHistoryFromSameDomain"
-        $default_log = "$reportpath\report_ADUsersWithSIDHistoryFromSameDomain.csv"
+        write-host "Starting Function ADGroupsWithSIDHistoryFromSameDomain"
+        $default_log = "$reportpath\report_ADGroupsWithSIDHistoryFromSameDomain.csv"
         $results = @()
         #Find groups with sid history from same domain
         foreach($domain in (get-adforest).domains){
@@ -416,3 +416,4 @@ if(!($dontrun)){
     }
 }
 
+$function_list | out-host

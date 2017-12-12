@@ -588,7 +588,8 @@ Function ADUserThumbnailPhotoSize{
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
                     PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,thumbnailPhoto `
                  -server $domain | `
-                    select $hash_domain, samaccountname,$hash_thumbnailphotosize,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
+                    select $hash_domain, samaccountname,@{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2)}}, `
+                        admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
                         PasswordLastSet,LastLogonDate,whenchanged,whencreated,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -661,7 +662,7 @@ $hash_pwdage = @{Name="PwdAgeinDays";Expression={`
 $hash_uacchanged = @{name='UACChanged';expression={`
     ($_ | Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA | where `
         { $_.pszAttributeName -eq "userAccountControl"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}
-$hash_thumbnailphotosize = @{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2) + " KB"}}
+$hash_thumbnailphotosize = @{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2)}}
 $hash_AuthNPolicy = @{Name="AuthNPolicy";Expression={if($_."msDS-AssignedAuthNPolicy"){$True}else{$False}}}
 $hash_AuthNPolicySilo = @{Name="AuthNPolicySilo";Expression={if($_."msDS-AssignedAuthNPolicySilo"){$True}else{$False}}}
 #endregion

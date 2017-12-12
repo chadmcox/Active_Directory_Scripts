@@ -54,8 +54,16 @@ from the use or distribution of the Sample Code..
  Creates Useful Cleanup Reports for Active Directory Users.
 
 #> 
-Param($reportpath = "$env:userprofile\Documents")
+Param($reportpath = "$env:userprofile\Documents",[switch]$dontrun,[switch]$skipfunctionlist)
 
+$reportpath = "$reportpath\ADCleanUpReports"
+If (!($(Try { Test-Path $reportpath } Catch { $true }))){
+    new-Item $reportpath -ItemType "directory"  -force
+}
+$reportpath = "$reportpath\Users"
+If (!($(Try { Test-Path $reportpath } Catch { $true }))){
+    new-Item $reportpath -ItemType "directory"  -force
+}
 #change current path to the report path
 cd $reportpath
 
@@ -565,6 +573,82 @@ Function ADUserDisabled{
         }
     }
 }
+Function ADUserThumbnailPhotoSize{
+#thumbnail photosize
+[cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserThumbnailPhotoSize"
+        $default_log = "$reportpath\report_ADUserThumbnailPhotoSize.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            
+            $results += get-aduser -ldapFilter "(thumbnailPhoto=*)" `
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
+                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,thumbnailPhoto `
+                 -server $domain | `
+                    select $hash_domain, samaccountname,$hash_thumbnailphotosize,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
+                        PasswordLastSet,LastLogonDate,whenchanged,whencreated,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user objects with thumbnailphoto."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
+Function ADUserwithPSOApplied{
+[cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserwithPSOApplied"
+        $default_log = "$reportpath\report_ADUserwithPSOApplied.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            
+            $results += get-aduser -ldapFilter "(|(msDS-PSOApplied=*)(msDS-ResultantPSO=*))" `
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
+                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,"msDS-PSOApplied" `
+                 -server $domain | `
+                    select $hash_domain, samaccountname,"msDS-PSOApplied",admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
+                        PasswordLastSet,LastLogonDate,whenchanged,whencreated,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user objects with fine grain password policy defined."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
+Function ADUserwithAuthNPolicyOrSiloDefined{
+[cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserwithAuthNPolicyOrSiloDefined"
+        $default_log = "$reportpath\report_ADUserwithAuthNPolicyOrSiloDefined.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            
+            $results += get-aduser -ldapFilter "(|(msDS-AssignedAuthNPolicy=*)(msDS-AssignedAuthNPolicySilo=*))" `
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
+                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,"msDS-AssignedAuthNPolicy"."msDS-AssignedAuthNPolicySilo" `
+                 -server $domain | `
+                    select $hash_domain, samaccountname,$hash_AuthNPolicy,$hash_AuthNPolicySilo,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
+                        PasswordLastSet,LastLogonDate,whenchanged,whencreated,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user objects with AuthNPolicySilo or AuthNPolicy set."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
 #region hash calculated properties
 
 #creating hash tables for each calculated property
@@ -577,7 +661,9 @@ $hash_pwdage = @{Name="PwdAgeinDays";Expression={`
 $hash_uacchanged = @{name='UACChanged';expression={`
     ($_ | Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA | where `
         { $_.pszAttributeName -eq "userAccountControl"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}
-
+$hash_thumbnailphotosize = @{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2) + " KB"}}
+$hash_AuthNPolicy = @{Name="AuthNPolicy";Expression={if($_."msDS-AssignedAuthNPolicy"){$True}else{$False}}}
+$hash_AuthNPolicySilo = @{Name="AuthNPolicySilo";Expression={if($_."msDS-AssignedAuthNPolicySilo"){$True}else{$False}}}
 #endregion
 
 
@@ -599,5 +685,8 @@ ADUserwithAdminCountandNotProtected
 ADUserwithAdminCountandSmartcardLogonNotRequired
 ADUserPWDAge
 ADUserDisabled
+ADUserThumbnailPhotoSize
+ADUserwithPSOApplied
+ADUserwithAuthNPolicyOrSiloDefined
 
 write-host "Report Can be found here $reportpath"

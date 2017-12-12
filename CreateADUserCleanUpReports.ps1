@@ -610,7 +610,7 @@ Function ADUserwithPSOApplied{
         
         foreach($domain in (get-adforest).domains){
             
-            $results += get-aduser -ldapFilter "(|(msDS-PSOApplied=*)(msDS-ResultantPSO=*))" `
+            $results += get-aduser -ldapFilter "(msDS-PSOApplied=*)" `
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
                     PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,"msDS-PSOApplied" `
                  -server $domain | `

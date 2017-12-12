@@ -251,9 +251,10 @@ function ADGroupsWithStaleAdminCount{
                     -server $domain | select @{name='Domain';expression={$domain}},distinguishedname}
         foreach($grp in $flagged_groups){
             $gdn = ($grp).distinguishedname
-            $results = foreach($group in $default_admin_groups){
-                $gdn
-                $grp | select `
+            $results = @()
+            foreach($group in $default_admin_groups){
+                
+             $results += $grp | select `
                     @{Name="Group_Domain";Expression={$group.domain}},`
                     @{Name="Group_Distinguishedname";Expression={$group.distinguishedname}},`
                     @{Name="Member";Expression={if(Get-ADgroup -Filter {member -RecursiveMatch $gdn} -searchbase $group.distinguishedname -server $group.domain){$True}else{$False}}},`
@@ -262,7 +263,7 @@ function ADGroupsWithStaleAdminCount{
             if($results | where {$_.member -eq $True}){
                 $non_orphan_results += $results | where {$_.member -eq $True}
             }else{
-                #$results | select Domain,objectclass,admincount,adminCountDate,distinguishedname | get-unique
+                $results | select Domain,objectclass,admincount,adminCountDate,distinguishedname | get-unique
                 $orphan_results += $results  | select Domain,objectclass,admincount,adminCountDate,distinguishedname | get-unique
             }
         }

@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -69,7 +69,7 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 #change current path to the report path
 cd $reportpath
 
-$function_list = @()
+$script:function_list = @()
 
 
 function ADPrivilegedGroupsWithSidHistory{
@@ -316,7 +316,7 @@ function ADGroupswhenMembershipsLastChange{
                     -Properties "msDS-ReplValueMetaData",samaccountname,GroupCategory,GroupScope,"msDS-ReplValueMetaData",`
                         WhenCreated,WhenChanged,description,managedby,objectSid,admincount -server $domain `
                 -searchbase $object_location -SearchScope OneLevel | `
-                    select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,$hash_lastmemchange,`
+                    select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,whenchanged,$hash_lastmemchange,`
                         isCriticalSystemObject,admincount,description,managedby,$hash_parentou,distinguishedname 
             }
         }
@@ -348,6 +348,29 @@ function ADGroupsAssignedbyAMACertificate{
         }
     }
 
+}
+function ADGroupswithPSOApplied{
+    [cmdletbinding()]
+    param()
+    process{
+        $function_list += "ADGroupwithPSOApplied"
+        write-host "Starting Function ADGroupswithPSOApplied"
+        $default_log = "$reportpath\report_ADGroupswithPSOApplied.csv"
+        $results = @()
+        foreach($domain in (get-adforest).domains){
+            $results += get-adgroup -LDAPFilter "(msDS-PSOApplied=*)" `
+                -Properties "msDS-PSOApplied",whencreated,groupscope,groupcategory,description,managedby,objectSid -server $domain | `
+                select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,"msDS-PSOApplied",`
+                    isCriticalSystemObject,description,managedby,$hash_rid,$hash_parentou,distinguishedname 
+
+}
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) Groups with Fine Grained Password Policy."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
+        }
+    }
 }
 
 #region hash calculated properties
@@ -410,11 +433,11 @@ if(!($dontrun)){
             @{name='Hours';expression={$_.hours}}, `
             @{name='Minutes';expression={$_.Minutes}}, `
             @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
-}else{
-    if($skipfunctionlist){
-        write-host "Type and run any of these functions to just run a single report."
-        $function_list | out-host
-    }
+    Measure-Command {ADGroupswithPSOApplied} | `
+            select @{name='RunDate';expression={get-date -format d}},`
+            @{name='Function';expression={"ADGroupswithPSOApplied"}}, `
+            @{name='Hours';expression={$_.hours}}, `
+            @{name='Minutes';expression={$_.Minutes}}, `
+            @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
 }
 
-$function_list | out-host

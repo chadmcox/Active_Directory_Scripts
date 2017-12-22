@@ -67,6 +67,12 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 #change current path to the report path
 cd $reportpath
 
+$domains = (get-adforest).domains
+
+if($includetrust){
+    $domains = ((get-adforest).domains | foreach {get-adtrust -filter * -server $_}).name | select -Unique
+}
+
 Function ADUsersWithSIDHistoryFromSameDomain{
     [cmdletbinding()]
     param()
@@ -78,9 +84,9 @@ Function ADUsersWithSIDHistoryFromSameDomain{
         #Find Users with sid history from same domain
         foreach($domain in (get-adforest).domains){
             [string]$Domain_SID = ((Get-ADDomain $domain).DomainSID.Value)
-            $results += Get-ADUser -Filter {SIDHistory -Like '*'} -Properties SIDHistory,admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
+            $results += Get-ADUser -Filter {SIDHistory -Like '*'} -Properties SIDHistory,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
                 Where { $_.SIDHistory -Like "$domain_sid-*"} | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -104,8 +110,8 @@ Function ADUsersWithDoNotRequireKerbPreauth{
         
         foreach($domain in (get-adforest).domains){
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=4194304)(!(IsCriticalSystemObject=TRUE)))"`
-                -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -129,8 +135,8 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
         
         foreach($domain in (get-adforest).domains){
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=128)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AllowReversiblePasswordEncryption -server $domain | `
-                    select $hash_domain, samaccountname,AllowReversiblePasswordEncryption,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AllowReversiblePasswordEncryption,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,AllowReversiblePasswordEncryption,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -153,8 +159,8 @@ Function ADUserswithUseDESKeyOnly{
         
         foreach($domain in (get-adforest).domains){
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=2097152)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,UseDESKeyOnly -server $domain | `
-                    select $hash_domain, samaccountname,UseDESKeyOnly,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,UseDESKeyOnly,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,UseDESKeyOnly,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -179,8 +185,8 @@ Function ADUserswithUnConstrainedDelegationEnabled{
             #Get-ADUser -Filter {UserAccountControl -band 524288}
             #Get-ADUser -Filter {Trustedfordelegation -eq $True}
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=524288)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
-                    select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -201,8 +207,8 @@ Function ADUserswithPwdNotSet{
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            $results += Get-ADUser -Filter {pwdLastSet -eq 0} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
-                    select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+            $results += Get-ADUser -Filter {pwdLastSet -eq 0} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -226,8 +232,8 @@ Function ADUserswithPwdNotRequired{
             #Get-ADUser -Filter {UserAccountControl -band 32}
             #Get-ADUser -Filter {PasswordNotRequired -eq $True}
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,PasswordNotRequired -server $domain | `
-                    select $hash_domain, samaccountname,PasswordNotRequired,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,PasswordNotRequired,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,PasswordNotRequired,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -252,8 +258,8 @@ Function ADUserswithPwdNeverExpired{
             #Get-ADUser -Filter {UserAccountControl -band 65536}
             #get-aduser -filter {PasswordNeverExpires -eq $true}
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=65536)(!(IsCriticalSystemObject=TRUE)))" `
-                 -Properties admincount,enabled,PasswordNeverExpires,PasswordExpired,PasswordLastSet -server $domain | `
-                    select $hash_domain, samaccountname,PasswordNeverExpires,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordNeverExpires,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,PasswordNeverExpires,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -275,8 +281,31 @@ Function ADUserswithAdminCount{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -Filter {admincount -eq 1 -and iscriticalsystemobject -notlike "*"}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user object with admincount set."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
+Function ADUserswithAdminCountandEmailorSkypeEnabled{
+    #users_with_admincount
+    [cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserswithAdminCountandEmailorSkypeEnabled"
+        $default_log = "$reportpath\report_ADUserswithAdminCountandEmailorSkypeEnabled.csv"
+        $results = @()
+        
+        foreach($domain in (get-adforest).domains){
+            
+            $results += get-aduser -filter {(proxyaddresses -like "*" -or msRTCSIP-PrimaryUserAddress -like "*") -and (admincount -eq 1 -and iscriticalsystemobject -notlike "*")} `
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -388,10 +417,10 @@ Function ADUserswithStalePWDAgeAndLastLogon{
 
         foreach($domain in (get-adforest).domains){
             $results += get-aduser -Filter {(LastLogonTimeStamp -lt $threshold_time -or LastLogonTimeStamp -notlike "*") -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) -and (iscriticalsystemobject -notlike "*") -and (whencreated -lt $create_time)}`
-                    -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,PasswordNeverExpires,CannotChangePassword,SmartcardLogonRequired `
+                    -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,LastLogonDate,PasswordNeverExpires,CannotChangePassword,SmartcardLogonRequired `
                     -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
-                        SmartcardLogonRequired,PasswordLastSet,LastLogonDate,whencreated,$hash_parentou
+                        SmartcardLogonRequired,PasswordLastSet,LastLogonDate,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -414,8 +443,8 @@ Function ADUserswithNonStandardPrimaryGroup{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -Filter {primaryGroupID -ne 513 -and iscriticalsystemobject -notlike "*"}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,primaryGroupID,primaryGroup -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,primaryGroupID,primaryGroup,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,primaryGroupID,primaryGroup,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,primaryGroupID,primaryGroup,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -437,8 +466,8 @@ Function ADUserswithAdminCountAndSPN{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -Filter {admincount -eq 1 -and iscriticalsystemobject -notlike "*" -and servicePrincipalName -like '*'}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -463,8 +492,8 @@ Function ADUserswithAdminCountandUnConstrainedDelegation{
             #Get-ADUser -Filter {UserAccountControl -band 524288}
             #Get-ADUser -Filter {Trustedfordelegation -eq $True}
             $results += get-aduser -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=524288)(!(IsCriticalSystemObject=TRUE))(AdminCount=1))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation -server $domain | `
-                    select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,Trustedfordelegation,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -486,8 +515,8 @@ Function ADUserwithAdminCountandNotProtected{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -Filter {admincount -eq 1 -and iscriticalsystemobject -notlike "*" -and AccountNotDelegated -eq $false}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AccountNotDelegated -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,AccountNotDelegated,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,AccountNotDelegated,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,AccountNotDelegated,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -508,8 +537,8 @@ Function ADUserwithAdminCountandSmartcardLogonNotRequired{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -Filter {admincount -eq 1 -and iscriticalsystemobject -notlike "*" -and SmartcardLogonRequired -eq $false}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,SmartcardLogonRequired -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,SmartcardLogonRequired,$hash_parentou
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,SmartcardLogonRequired,whencreated,whenchanged -server $domain | `
+                    select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,SmartcardLogonRequired,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -531,11 +560,11 @@ Function ADUserPWDAge{
         foreach($domain in (get-adforest).domains){
             
             $results += get-aduser -LDAPFilter "(!(IsCriticalSystemObject=TRUE))" `
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,LastLogonDate,`
                     PasswordNeverExpires,CannotChangePassword,SmartcardLogonRequired,PwdLastSet `
                  -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
-                        SmartcardLogonRequired,PasswordLastSet,$hash_pwdage,LastLogonDate,whencreated,$hash_parentou
+                        SmartcardLogonRequired,PasswordLastSet,$hash_pwdage,LastLogonDate,whencreated,whenchanged,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -560,7 +589,7 @@ Function ADUserDisabled{
             
             $results += get-aduser -Filter {(Enabled -eq $false) -and (iscriticalsystemobject -notlike "*")} `
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
-                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,"msDS-ReplAttributeMetaData" `
+                    PasswordNeverExpires,CannotChangePassword,whencreated,whenchanged,PwdLastSet,"msDS-ReplAttributeMetaData" `
                  -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
                         PasswordLastSet,LastLogonDate,$hash_uacchanged,whenchanged,whencreated,$hash_parentou
@@ -586,7 +615,7 @@ Function ADUserThumbnailPhotoSize{
             
             $results += get-aduser -ldapFilter "(thumbnailPhoto=*)" `
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
-                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,thumbnailPhoto `
+                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,thumbnailPhoto,whencreated,whenchanged `
                  -server $domain | `
                     select $hash_domain, samaccountname,@{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2)}}, `
                         admincount,enabled,PasswordExpired,PasswordNeverExpires,CannotChangePassword,`
@@ -650,6 +679,53 @@ Function ADUserwithAuthNPolicyOrSiloDefined{
         }
     }
 }
+Function ADUserDuplicateSamAccountNameOrUPN{
+[cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUserDuplicateSamAccountNameOrUPN"
+        
+        
+        $temp_log = "$reportpath\tmp_forADUserDuplicateSamAccountNameOrUPN.csv"
+        If ($(Try { Test-Path $temp_log} Catch { $false })){Remove-Item $temp_log -force}
+        $users = @()
+        
+        foreach($domain in (get-adforest).domains){
+            get-aduser -filter {enabled -eq $true -and iscriticalsystemobject -notlike "*"} -server $domain | select $hash_domain,samaccountname,UserPrincipalName | export-csv $temp_log -append -NoTypeInformation
+        }
+        write-host "Searching for Duplicate SAM"
+        $sam_log = "$reportpath\report_ADUserDuplicateSamAccountNameFound.csv"
+        If ($(Try { Test-Path $sam_log} Catch { $false })){Remove-Item $sam_log -force}
+        $users = import-csv $temp_log | select * | sort-object -Property samaccountname 
+        foreach($user in $Users){
+            if($user.samaccountname -eq $lastuser){
+                    $user | select domain, samaccountname,`
+                     @{name='FoundIn';expression={$lastdomain}}| export-csv $sam_log -Append -notypeinformation
+                }else{
+                    $lastuser = $user.samaccountname
+                    $lastdomain = $user.domain
+                }
+        }
+        write-host "Searching for Duplicate UPN"
+        $upn_log = "$reportpath\report_ADUserDuplicateUPNFound.csv"
+        If ($(Try { Test-Path $upn_log} Catch { $false })){Remove-Item $upn_log -force}
+        $users = import-csv $temp_log | select * | sort-object -Property UserPrincipalName
+        foreach($user in $Users){
+            if($user.UserPrincipalName -eq $lastuser -and $user.UserPrincipalName -like "*"){
+                    $user | select domain, userprincipalname,`
+                     @{name='FoundIn';expression={$lastdomain}}| export-csv $upn_log -Append -notypeinformation
+                }else{
+                    $lastuser = $user.UserPrincipalName
+                    $lastdomain = $user.domain
+                }
+        }
+
+        if($results){
+            write-host "Found $(($results | measure).count) user objects with AuthNPolicySilo or AuthNPolicy set."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
 #region hash calculated properties
 
 #creating hash tables for each calculated property
@@ -680,6 +756,7 @@ ADUserswithAdminCount
 ADUserswithStaleAdminCount
 ADUserswithStalePWDAgeAndLastLogon
 ADUserswithNonStandardPrimaryGroup
+ADUserswithAdminCountandEmailorSkypeEnabled
 ADUserswithAdminCountAndSPN
 ADUserswithAdminCountandUnConstrainedDelegation
 ADUserwithAdminCountandNotProtected
@@ -689,5 +766,6 @@ ADUserDisabled
 ADUserThumbnailPhotoSize
 ADUserwithPSOApplied
 ADUserwithAuthNPolicyOrSiloDefined
+ADUserDuplicateSamAccountNameOrUPN
 
 write-host "Report Can be found here $reportpath"

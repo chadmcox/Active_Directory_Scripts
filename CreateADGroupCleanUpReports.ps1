@@ -108,7 +108,9 @@ function ADGroupsWithNoMembers{
                  -server $domain -properties samaccountname,Name,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,Name,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,whencreated,whenchanged,description,managedby,$hash_rid,$hash_parentou,distinguishedname | `
+                    iscriticalsystemobject,whencreated,whenchanged,description,managedby,`
+                    @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}},`
+                    $hash_parentou,distinguishedname | `
                 where {$_.Rid -gt 1000}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -126,6 +128,8 @@ function ADGroupsWithCircularNesting{
         $function_list += "ADGroupsWithCircularNesting"
         write-host "Starting Function ADGroupsWithCircularNesting"
         $default_log = "$reportpath\report_ADGroupsWithCircularNesting.csv"
+        $expanded_groups_log = "$reportpath\report_ADGroupsExpanded.csv"
+        If ($(Try { Test-Path $expanded_groups_log} Catch { $false })){Remove-Item $expanded_groups_log -force}
         $results = @(); $groups = @()
         $script:searched_groups = @()
         $script:nested_groups = @()
@@ -144,12 +148,14 @@ function ADGroupsWithCircularNesting{
                             $objtmp = new-object -type psobject
                                 $objtmp | Add-Member -MemberType NoteProperty -Name "group" -Value $gdn
                                 $objtmp | Add-Member -MemberType NoteProperty -Name "memberof" -Value $_
-                             $script:expanded_groups += $objtmp
+                              $objtmp | export-csv $expanded_groups_log -Append -NoTypeInformation
                         }
                     }
                 }
             }
         }
+
+        $script:expanded_groups = import-csv $expanded_groups_log
 
         $groups | foreach {
             if(!($script:searched_groups -contains $_)){
@@ -289,7 +295,10 @@ function ADGroupsNeverUsed{
                 -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory,description,managedby,objectSid -server $domain | `
                 where {(!($_."msDS-ReplValueMetaData"))} | `
                 select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,`
-                    $hash_ageindays,isCriticalSystemObject,description,managedby,$hash_rid,$hash_parentou,distinguishedname |`
+                    @{name='AgeinDays';expression={(new-TimeSpan($($_.whencreated)) $(Get-Date)).days}},`
+                    isCriticalSystemObject,description,managedby,`
+                    @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}},`
+                    $hash_parentou,distinguishedname |`
                 where {$_.Rid -gt 1000} 
 
 }
@@ -316,8 +325,10 @@ function ADGroupswhenMembershipsLastChange{
                     -Properties "msDS-ReplValueMetaData",samaccountname,GroupCategory,GroupScope,"msDS-ReplValueMetaData",`
                         WhenCreated,WhenChanged,description,managedby,objectSid,admincount -server $domain `
                 -searchbase $object_location -SearchScope OneLevel | `
-                    select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,whenchanged,$hash_lastmemchange,`
-                        isCriticalSystemObject,admincount,description,managedby,$hash_parentou,distinguishedname 
+                    select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,whenchanged,`
+                        @{name='MembershipLastChanged';expression={($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" }}| select -first 1).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}},`
+                        isCriticalSystemObject,admincount,description,managedby,$hash_parentou,distinguishedname
+                        
             }
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -377,9 +388,6 @@ function ADGroupswithPSOApplied{
 $hash_domain = @{name='Domain';expression={$domain}}
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
-$hash_rid = @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}}
-$hash_ageindays = @{name='AgeinDays';expression={(new-TimeSpan($($_.whencreated)) $(Get-Date)).days}}
-$hash_lastmemchange = @{name='MembershipLastChanged';expression={($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" }}| select -first 1).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}
 #endregion
 
 cls

@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 0.1
 
 .GUID f46faf8e-6b30-480e-891a-26aeb3937d73
 
@@ -40,8 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-0.2 added search for ad groups and users built in to script
-Added switch to just run a report
+
 
 .PRIVATEDATA 
 
@@ -55,7 +54,6 @@ Added switch to just run a report
 
 .DESCRIPTION 
  This script will take a csv file of a domain, gpo and group or user samaccountname and remove that permission from the gpo. 
- 
 .EXAMPLE
     To create just the report of stale objects without fixing them run
     .\FindandFixStaleAdminCount.ps1 -reportonly
@@ -64,13 +62,14 @@ Param($reportpath = "$env:userprofile\Documents",[switch]$reportonly)
 
 $orphan_log = "$reportpath\report_ADObjectswithStaleAdminCount.csv"
 $default_log = "$reportpath\report_ADObjectsMembersofPrivilegedGroups.csv"
-
+$default_err_log = $reportpath + '\err_log.txt'
 
 Function ADObjectswithStaleAdminCount{
     #users_with_admincount
     [cmdletbinding()]
     param()
     process{
+        write-host "Starting Function ADObjectswithStaleAdminCount"
         write-host "Starting Function ADObjectswithStaleAdminCount"
         
         #users with stale admin count
@@ -106,8 +105,10 @@ Function ADObjectswithStaleAdminCount{
         if($orphan_results){
             write-host "Found $(($orphan_results | measure).count) user object that are no longer a member of a priviledged group but still has admincount attribute set to 1"
             write-host "and inheritance disabled."
-            $orphan_results | group objectclass | select name,count
-            
+            $orphan_results | group objectclass | select name,count | Out-Host
+            if(!($reportonly)){
+                FixStaleAdminCount
+            }
         }else{
             write-host "Found 0 Objects with Stale Admin Count"
         }
@@ -130,12 +131,16 @@ function FixStaleAdminCount{
                     New-PSDrive -Name ADROOT -PSProvider ActiveDirectory -Server $_.domain -Scope Global -root "//RootDSE/"
                 }
 
-                get-adobject $_.distinguishedname -server $_.domain | set-adobject -Remove @{admincount=1} -server $_.domain
+                try{get-adobject $_.distinguishedname -server $_.domain | set-adobject -Remove @{admincount=1} -server $_.domain}
+                    catch{"Failed Changing AdminCount on $($_.distinguishedname)" | out-file $default_err_log -append
+                            $_.Exception| out-file $default_err_log -append }
                 $user = "ADROOT:\$(($_).distinguishedname)"
                 $SourceACL = Get-ACL -Path $user
                 $SourceACL.SetAccessRuleProtection($False,$True)
-                Set-Acl -Path $user -AclObject $SourceACL
-                get-adobject $_.distinguishedname -Properties admincount -server $_.domain | select $hash_domain, distinguishedname, admincount
+                try{Set-Acl -Path $user -AclObject $SourceACL}
+                    catch{"Failed Changing ACL on $($_.distinguishedname)" | out-file $default_err_log -append
+                            $_.Exception| out-file $default_err_log -append}
+                
             }
         }
     }
@@ -144,6 +149,3 @@ function FixStaleAdminCount{
 $hash_domain = @{name='Domain';expression={$domain}}
 
 ADObjectswithStaleAdminCount
-if(!($reportonly)){
-    FixStaleAdminCount
-}

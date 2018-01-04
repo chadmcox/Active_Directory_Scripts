@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.3
 
 .GUID f46faf8e-6b30-480e-891a-26aeb3937d73
 
@@ -40,7 +40,10 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-
+    0.3 Only runs the clean up if it finds stale admin count objects.
+        Error handling and log if the fix portion fails.
+    0.2 Added query to find all the users and groups
+        created report only option
 
 .PRIVATEDATA 
 

@@ -105,7 +105,7 @@ Function DisableADUsers{
         }else{
             $last_domain = $null
             import-csv $default_log | where {$_.enabled -eq $True} | foreach{
-                try{Disable-ADAccount ($_).samaccountname -server ($_).domain -whatif}
+                try{Disable-ADAccount ($_).samaccountname -server ($_).domain}
                 catch{"Failed"; "$(Get-Date) - $_.domain - Failed to disable $(($_).samaccountname) - $($_.Exception)" | `
                 out-file $default_err_log -append}
             }

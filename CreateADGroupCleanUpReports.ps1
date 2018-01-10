@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.7
+.VERSION 0.8
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.8 Added ou by ou search scope to make impact against dc better.
 0.1 First go around of the script
 
 .PRIVATEDATA 
@@ -68,10 +69,32 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 
 #change current path to the report path
 cd $reportpath
+$script:ous = @()
 
 $script:function_list = @()
 
+Function ADOUList{
+    [cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADOUList"
+        $script:ou_list = "$reportpath\ADOUList.csv"
+        try{Get-ChildItem $script:ou_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-10))} | Remove-Item -force}catch{}
 
+        If (!(Test-Path $script:ou_list)){
+            foreach($domain in (get-adforest).domains){
+                try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS))" -server $domain | select `
+                     $hash_domain, DistinguishedName  | export-csv $script:ou_list -append -NoTypeInformation}
+                catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
+                try{(get-addomain $domain).UsersContainer | Get-ADObject -server $domain | select `
+                     $hash_domain, DistinguishedName | export-csv $script:ou_list -append -NoTypeInformation}
+                catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            }
+        }
+
+        $script:ous = import-csv $script:ou_list
+    }
+}
 function ADPrivilegedGroupsWithSidHistory{
     [cmdletbinding()]
     param()
@@ -81,10 +104,17 @@ function ADPrivilegedGroupsWithSidHistory{
         $default_log = "$reportpath\report_ADPrivilegedGroupsWithSidHistory.csv"
         $results = @()
         
-        foreach($domain in (get-adforest).domains){
+        #Find Users with sid history from same domain
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
             $results += get-adgroup -filter 'admincount -eq 1 -and iscriticalsystemobject -like "*" -and sIDHistory -like "*"' `
-                 -server $domain -properties samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject,whencreated,whenchanged,description,managedby | `
-                 select $hash_domain,samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject,whencreated,whenchanged,description,managedby,$hash_parentou,distinguishedname
+                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
+                 -properties samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject, `
+                    whencreated,whenchanged,description,managedby | `
+                 select $hash_domain,samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject,`
+                    whencreated,whenchanged,description,managedby,$hash_parentou,distinguishedname
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -103,9 +133,13 @@ function ADGroupsWithNoMembers{
         $default_log = "$reportpath\report_ADGroupsWithNoMembers.csv"
         $results = @()
         
-        foreach($domain in (get-adforest).domains){
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
             $results += get-adgroup -LDAPFilter "(!(member=*))" `
-                 -server $domain -properties samaccountname,Name,groupscope,groupcategory,admincount,`
+                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
+                 -properties samaccountname,Name,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,Name,groupscope,groupcategory,admincount,`
                     iscriticalsystemobject,whencreated,whenchanged,description,managedby,`
@@ -134,13 +168,14 @@ function ADGroupsWithCircularNesting{
         $script:searched_groups = @()
         $script:nested_groups = @()
         $script:expanded_groups = @()
-        foreach($domain in (get-adforest).domains){
-            foreach($object_location in (Get-adobject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=container))"`
-                -server $domain | where {$_.DistinguishedName -NotLike "*CN=System,DC*"}).DistinguishedName){
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
                 get-adgroup -LDAPFilter "(|(member=*)(memberof=*))" `
-                    -searchbase $object_location -SearchScope OneLevel `
-                     -server $domain -properties memberof | `
-                      select $hash_domain,distinguishedname,memberof | foreach{
+                     -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
+                     -properties memberof | `
+                        select $hash_domain,distinguishedname,memberof | foreach{
                 $gdn = ($_).DistinguishedName
                 $groups += ($_).DistinguishedName 
                 if($_.memberof){
@@ -153,7 +188,7 @@ function ADGroupsWithCircularNesting{
                     }
                 }
             }
-        }
+        
 
         $script:expanded_groups = import-csv $expanded_groups_log
 
@@ -218,9 +253,13 @@ function ADGroupsWithSIDHistoryFromSameDomain{
         $default_log = "$reportpath\report_ADGroupsWithSIDHistoryFromSameDomain.csv"
         $results = @()
         #Find groups with sid history from same domain
-        foreach($domain in (get-adforest).domains){
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
             [string]$Domain_SID = ((Get-ADDomain $domain).DomainSID.Value)
-            $results += Get-ADGroup -Filter {SIDHistory -Like '*'} -server $domain `
+            $results += Get-ADGroup -Filter {SIDHistory -Like '*'} `
+                -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
                 -properties samaccountname,Name,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,SIDHistory | `
                 Where { $_.SIDHistory -Like "$domain_sid-*"} | `
@@ -240,7 +279,7 @@ function ADGroupsWithStaleAdminCount{
     param()
     process{
         $function_list += "ADGroupsWithStaleAdminCount"
-        write-host "Starting Function ADUserswithStaleAdminCount"
+        write-host "Starting Function ADGroupswithStaleAdminCount"
         $orphan_log = "$reportpath\report_ADGroupswithStaleAdminCount.csv"
         $default_log = "$reportpath\report_ADGroupsMembersofPrivilegedGroups.csv"
         #groups with stale admin count
@@ -290,9 +329,13 @@ function ADGroupsNeverUsed{
         write-host "Starting Function ADGroupsNeverUsed"
         $default_log = "$reportpath\report_ADGroupsNeverUsed.csv"
         $results = @()
-        foreach($domain in (get-adforest).domains){
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
             $results += get-adgroup -LDAPFilter "(&(!(member=*))(!(memberof=*)))" `
-                -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory,description,managedby,objectSid -server $domain | `
+                -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory,description,managedby,objectSid `
+                -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                 where {(!($_."msDS-ReplValueMetaData"))} | `
                 select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,`
                     @{name='AgeinDays';expression={(new-TimeSpan($($_.whencreated)) $(Get-Date)).days}},`
@@ -305,7 +348,7 @@ function ADGroupsNeverUsed{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            write-host "Found $(($results | measure).count) Groups not ever used."
+            write-host "Found $(($results | measure).count) Groups never used."
             write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
         }
     }
@@ -429,7 +472,7 @@ if(!($dontrun)){
             @{name='Hours';expression={$_.hours}}, `
             @{name='Minutes';expression={$_.Minutes}}, `
             @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
-    Measure-Command {ADGroupsAssignedbyAMACertificate} | `
+    #Measure-Command {ADGroupsAssignedbyAMACertificate} | `
             select @{name='RunDate';expression={get-date -format d}},`
             @{name='Function';expression={"ADGroupsAssignedbyAMACertificate"}}, `
             @{name='Hours';expression={$_.hours}}, `

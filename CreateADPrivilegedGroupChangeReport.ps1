@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.2 added cert publisher
 0.1 First go around of the script
 
 .PRIVATEDATA 
@@ -78,7 +79,7 @@ $admincount_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup 
             -filter 'admincount -eq 1 -and iscriticalsystemobject -notlike "*"' `
              -server $domain | select $hash_domain,distinguishedname,SamAccountName}
 $privileged_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
-            -filter 'admincount -eq 1 -and iscriticalsystemobject -like "*"' `
+            -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
              -server $domain | select $hash_domain,distinguishedname,SamAccountName}
 
 #creates a legit list of privileged groups, can easily add a else statement to report on groups with

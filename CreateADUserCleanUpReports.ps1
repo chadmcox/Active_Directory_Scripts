@@ -1,6 +1,7 @@
+
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.8
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -39,6 +40,9 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.8 Search for objects in root level of domain
+0.7
+formatting and added iscritical system object exclusion to blankpwd function
 0.6
 ran into timeout issues in large domains, breaking up queries to be smaller more effiecent.
 0.5
@@ -116,7 +120,8 @@ Function ADUsersWithSIDHistoryFromSameDomain{
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
             [string]$Domain_SID = ((Get-ADDomain $domain).DomainSID.Value)
-            try{$results += Get-ADUser -Filter {SIDHistory -Like '*'} -Properties SIDHistory,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged `
+            try{$results += Get-ADUser -Filter {SIDHistory -Like '*'} `
+                -Properties SIDHistory,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged `
                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                 Where { $_.SIDHistory -Like "$domain_sid-*"} | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
@@ -265,7 +270,8 @@ Function ADUserswithPwdNotSet{
             ADOUList
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
-            try{$results += Get-ADUser -Filter {pwdLastSet -eq 0} -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation,whencreated,whenchanged `
+            try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (iscriticalsystemobject -notlike "*")} `
+                -Properties admincount,enabled,PasswordExpired,PasswordLastSet,Trustedfordelegation,whencreated,whenchanged `
                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
             catch{"function ADUserswithPwdNotSet - $domain - $($_.Exception)" | out-file $default_err_log -append}
@@ -470,7 +476,7 @@ Function ADUserswithAdminCountnotMemberofProtectedUsersGroup{
             if($results | where {$_.member -eq $True}){
                 
             }else{
-                #$results | select Domain,objectclass,admincount,adminCountDate,distinguishedname | get-unique
+                $results | select Domain,objectclass,admincount,adminCountDate,distinguishedname | get-unique
                 $not_protected_results += $results  | select Domain,SamAccountName,objectclass,admincount,adminCountDate,distinguishedname | get-unique
             }
         }
@@ -835,6 +841,29 @@ Function ADUserwithAuthNPolicyOrSiloDefined{
         }
     }
 }
+Function ADUsersFoundinRootofDomain{
+[cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADUsersFoundinRootofDomain"
+        $default_log = "$reportpath\report_ADUsersFoundinRootofDomain.csv"
+        $results = @()
+        foreach($domain in (get-adforest).domains){
+            try{$results += Get-ADUser -Filter * `
+                -searchbase $((get-adobject -LDAPFilter '(objectclass=domainDNS)' -server $domain).distinguishedname) `
+                    -SearchScope OneLevel -server $domain -Properties whencreated,samaccountname,enabled,PasswordExpired | `
+                    Select $hash_domain,samaccountname, whencreated, distinguishedname}
+            catch{"function ADUsersFoundinRootofDomain - $domain - $($_.Exception)" | out-file $default_err_log -append}     
+        }
+        
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            write-host "Found $(($results | measure).count) user objects that exist in root of domain."
+            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+        }
+    }
+}
 Function ADUserDuplicateSamAccountNameOrUPN{
 [cmdletbinding()]
     param()
@@ -871,7 +900,7 @@ Function ADUserDuplicateSamAccountNameOrUPN{
         write-host "Searching for Duplicate UPN"
         $upn_log = "$reportpath\report_ADUserDuplicateUPNFound.csv"
         If ($(Try { Test-Path $upn_log} Catch { $false })){Remove-Item $upn_log -force}
-        $users = import-csv $temp_log | select * | sort-object -Property UserPrincipalName
+        $users = import-csv $temp_log | where {$_.UserPrincipalName -like "*"} | select * | sort-object -Property UserPrincipalName
         foreach($user in $Users){
             if($user.UserPrincipalName -eq $lastuser -and $user.UserPrincipalName -like "*"){
                     $user | select domain, userprincipalname,`
@@ -906,6 +935,7 @@ $hash_AuthNPolicySilo = @{Name="AuthNPolicySilo";Expression={if($_."msDS-Assigne
 #endregion
 
 
+ADUsersFoundinRootofDomain
 ADUsersWithSIDHistoryFromSameDomain
 ADUsersWithDoNotRequireKerbPreauth
 ADUsersWithStorePwdUsingReversibleEncryption

@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.10
+.VERSION 0.11
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.11 added switch to import all the functions and not to run the reports.
 0.10 added
     search for users with empty display name
     search for users with usercertficate greater than 15 or expired.
@@ -67,7 +68,7 @@ error handling sends failed query to text file
  Creates Useful Cleanup Reports for Active Directory Users.
 
 #> 
-Param($reportpath = "$env:userprofile\Documents",[switch]$dontrun,[switch]$skipfunctionlist)
+Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)
 
 $reportpath = "$reportpath\ADCleanUpReports"
 If (!($(Try { Test-Path $reportpath } Catch { $true }))){
@@ -81,13 +82,16 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 $default_err_log = $reportpath + '\err_log.txt'
 $script:finished =@()
 
-#change current path to the report path
-cd $reportpath
+
 
 $domains = (get-adforest).domains
+$global:singleuse_user = $False
 
-if($includetrust){
-    $domains = ((get-adforest).domains | foreach {get-adtrust -filter * -server $_}).name | select -Unique
+function DisplayFunctionResults{
+    if($global:singleuse_user){$script:finished
+                write-host "Report Can be found here $reportpath"
+                $script:finished = @()
+    }
 }
 Function ADOUList{
     [cmdletbinding()]
@@ -100,7 +104,7 @@ Function ADOUList{
         If (!(Test-Path $script:ou_list)){
             Write-host "This will take a few minutes to gather a list of OU's to search through."
             foreach($domain in (get-adforest).domains){
-                try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS))" -server $domain | select `
+                try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS)(objectclass=builtinDomain))" -server $domain | select `
                      $hash_domain, DistinguishedName  | export-csv $script:ou_list -append -NoTypeInformation}
                 catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
                 try{(get-addomain $domain).UsersContainer | Get-ADObject -server $domain | select `
@@ -136,9 +140,8 @@ Function ADUsersWithSIDHistoryFromSameDomain{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with sidhistory from the same domain."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
             $script:finished += "User object with sidhistory from the same domain: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -167,9 +170,8 @@ Function ADUsersWithDoNotRequireKerbPreauth{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with account does not require Kerberos pre-authentication for logging on enabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
             $script:finished += "User object with account does not require Kerberos pre-authentication for logging on enabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -199,9 +201,8 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with account Store Password Using Reversible Encryption enabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
             $script:finished += "User object with account Store Password Using Reversible Encryption enabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -229,9 +230,9 @@ Function ADUserswithUseDESKeyOnly{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with account Use DES Key Only enabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
+            
             $script:finished += "User object with account Use DES Key Only enabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -261,9 +262,9 @@ Function ADUserswithUnConstrainedDelegationEnabled{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with trusted for delegation (unconstrained kerb delegation) enabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+            
             $script:finished += "User object with trusted for delegation (unconstrained kerb delegation) enabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -290,9 +291,9 @@ Function ADUserswithPwdNotSet{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with password not set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+            
             $script:finished += "User object with password not set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -321,9 +322,9 @@ Function ADUserswithPwdNotRequired{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with password not required."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+            
             $script:finished += "User object with password not required: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -353,9 +354,9 @@ Function ADUserswithPwdNeverExpired{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with password never expired set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+            
             $script:finished += "User object with password never expired set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -381,9 +382,8 @@ Function ADUserswithAdminCount{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with admincount set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -410,9 +410,8 @@ Function ADUserswithAdminCountandEmailorSkypeEnabled{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with admincount set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set and email or skype: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -455,10 +454,8 @@ Function ADUserswithStaleAdminCount{
         $non_orphan_results  | export-csv $default_log -NoTypeInformation
         $orphan_results | export-csv $orphan_log -NoTypeInformation
         if($orphan_results){
-            #write-host "Found $(($orphan_results | measure).count) user object that are no longer a member of a priviledged group but still has admincount attribute set to 1"
-            #write-host "and inheritance disabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $orphan_log | out-gridview"
             $script:finished += "User object no longer a member of a priviledged group with stale adminsdholder: $(($orphan_results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -498,9 +495,8 @@ Function ADUserswithAdminCountnotMemberofProtectedUsersGroup{
         
         $not_protected_results | export-csv $default_log -NoTypeInformation
         if($not_protected_results){
-            #write-host "Found $(($not_protected_results | measure).count) privileged user objects not in the protected users group."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "Privileged user objects not in the protected users group: $(($not_protected_results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -530,11 +526,8 @@ Function ADUserswithStalePWDAgeAndLastLogon{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with passwords or lastlogon time stamps `
-            #    greater than $DaysInactive days. Most of these objects can be considered stale."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with passwords or lastlogon timestamps greater than $DaysInactive days: $(($results | measure).count)"
-            
+            DisplayFunctionResults
         }
     }
 }
@@ -561,9 +554,8 @@ Function ADUserswithNonStandardPrimaryGroup{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with Primary Group other than Domain Users (513)."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with Primary Group other than Domain Users (513): $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -590,9 +582,8 @@ Function ADUserswithAdminCountAndSPN{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with admincount set and serviceprincipalnames defined."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set and serviceprincipalnames defined: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -622,9 +613,8 @@ Function ADUserswithAdminCountandUnConstrainedDelegation{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with trusted for delegation (unconstrained kerb delegation) enabled and could have privilaged access (admincount set)."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set and trusted for delegation (unconstrained kerb delegation) enabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -651,9 +641,8 @@ Function ADUserwithAdminCountandNotProtected{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with admincount set and Account is sensitive and cannot be delegated is Disabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set and  Account is sensitive and cannot be delegated is Disabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -679,9 +668,8 @@ Function ADUserwithAdminCountandSmartcardLogonNotRequired{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with admincount set and Smartcard required for logon disabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with admincount set and  Account is sensitive and Smartcard required for logon disabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -713,7 +701,7 @@ Function ADUserPWDAge{
             $results | where {$_.PwdAgeinDays -gt 365} | export-csv "$reportpath\report_ADUserPWDAgeover1Year.csv" -NoTypeInformation
             $results | where {$_.PwdAgeinDays -gt 1825} | export-csv "$reportpath\report_ADUserPWDAgeover5Years.csv" -NoTypeInformation
             $results | where {$_.PwdAgeinDays -gt 3650} | export-csv "$reportpath\report_ADUserPWDAgeover10Years.csv" -NoTypeInformation
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
+            DisplayFunctionResults
         }
     }
 }
@@ -742,9 +730,8 @@ Function ADUserDisabled{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects that are disabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object that are disabled: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -775,9 +762,8 @@ Function ADUserThumbnailPhotoSize{
         
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects with thumbnailphoto."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with thumbnailphoto: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -807,9 +793,8 @@ Function ADUserwithEmptyUPN{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects with no UPN set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with no UPN set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -837,9 +822,8 @@ Function ADUserwithPSOApplied{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects with fine grain password policy defined."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with fine grain password policy set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -864,9 +848,8 @@ Function ADUserwithAuthNPolicyOrSiloDefined{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects with AuthNPolicySilo or AuthNPolicy set."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object with AuthNPolicySilo or AuthNPolicy set: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -888,9 +871,8 @@ Function ADUsersFoundinRootofDomain{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects that exist in root of domain."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object that exist in root of domain: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -917,9 +899,8 @@ Function ADUserswithnoDisplayName{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user object with account Use DES Key Only enabled."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview "
             $script:finished += "User object with empty displayname attribute: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -940,9 +921,8 @@ Function ADUsersisDeleted{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            #write-host "Found $(($results | measure).count) user objects that are deleted."
-            #write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             $script:finished += "User object that are in a deleted state: $(($results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -951,7 +931,6 @@ Function ADUserDuplicateSamAccountNameOrUPN{
     param()
     process{
         write-host "Starting Function ADUserDuplicateSamAccountNameOrUPN"
-        
         
         $temp_log = "$reportpath\tmp_forADUserDuplicateSamAccountNameOrUPN.csv"
         If ($(Try { Test-Path $temp_log} Catch { $false })){Remove-Item $temp_log -force}
@@ -1024,6 +1003,7 @@ Function ADUserswithCertificates{
         if($results | where {$_.usercertificateCount -gt 15}){
             
             $script:finished += "Users found with more than 15 certificates in usercertificate or userSMIMECertificate attribute"
+            DisplayFunctionResults
         }
         $cert_results = @()
         $default_log = "$reportpath\report_ADUserswithExpiredCertificates.csv"
@@ -1041,8 +1021,8 @@ Function ADUserswithCertificates{
         }
         $cert_results | export-csv $default_log -NoTypeInformation
         if($cert_results){
-            
             $script:finished += "User objects with expired certificate in usercertificate attribute : $(($cert_results | measure).count)"
+            DisplayFunctionResults
         }
     }
 }
@@ -1065,35 +1045,26 @@ $hash_usercertificatecount = @{Name="usercertificateCount";Expression={$_.userce
 $hash_usersmimecount = @{Name="userSMIMECertificateCount";Expression={$_.userSMIMECertificate.count}}
 #endregion
 
-ADUserswithnoDisplayName
-ADUsersisDeleted
-ADUsersFoundinRootofDomain
-ADUsersWithSIDHistoryFromSameDomain
-ADUsersWithDoNotRequireKerbPreauth
-ADUsersWithStorePwdUsingReversibleEncryption
-ADUserswithUseDESKeyOnly
-ADUserswithUnConstrainedDelegationEnabled
-ADUserswithPwdNotSet
-ADUserswithPwdNeverExpired
-ADUserswithPwdNotRequired
-ADUserswithAdminCount
-ADUserswithStaleAdminCount
-ADUserswithAdminCountnotMemberofProtectedUsersGroup
-ADUserswithStalePWDAgeAndLastLogon
-ADUserswithNonStandardPrimaryGroup
-ADUserswithAdminCountandEmailorSkypeEnabled
-ADUserswithAdminCountAndSPN
-ADUserswithAdminCountandUnConstrainedDelegation
-ADUserwithAdminCountandNotProtected
-ADUserwithAdminCountandSmartcardLogonNotRequired
-ADUserwithEmptyUPN
-ADUserPWDAge
-ADUserDisabled
-ADUserThumbnailPhotoSize
-ADUserwithPSOApplied
-#ADUserwithAuthNPolicyOrSiloDefined
-ADUserswithCertificates
-ADUserDuplicateSamAccountNameOrUPN
 
-$script:finished
-write-host "Report Can be found here $reportpath"
+if(!($importfunctionsonly)){
+    $time_log = "$reportpath\runtime.csv"
+    (dir function: | where name -like aduser*).name | foreach{$script_function = $_
+        Measure-Command {Invoke-Expression -Command $script_function} | `
+            select @{name='RunDate';expression={get-date -format d}},`
+            @{name='Function';expression={$script_function}}, `
+            @{name='Hours';expression={$_.hours}}, `
+            @{name='Minutes';expression={$_.Minutes}}, `
+            @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
+        
+    }
+    
+    $script:finished
+    write-host "Report Can be found here $reportpath"
+}else{
+    $global:singleuse_user = $True
+    write-host -foreground yellow "Type out the function and press enter to run a particular report"
+    (dir function: | where name -like aduser*).name
+}
+
+#change current path to the report path
+cd $reportpath

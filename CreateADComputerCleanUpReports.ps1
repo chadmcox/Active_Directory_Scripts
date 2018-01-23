@@ -71,7 +71,7 @@ If (!($(Try { Test-Path "$reportpath\Computers" } Catch { $true }))){
 }
 
 $global:default_err_log = $reportpath + '\err_log.txt'
-$script:ous = @()
+$globalt:ous = @()
 $Global:finished = @()
 $global:singleuse_comp = $False
 #change current path to the report path
@@ -89,22 +89,22 @@ Function global:ADOUList{
     param()
     process{
         write-host "Starting Function ADOUList"
-        $script:ou_list = "$reportpath\Computers\ADOUList.csv"
-        Get-ChildItem $script:ou_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-10))} | Remove-Item -force
+        $ou_list = "$reportpath\Computers\ADOUList.csv"
+        Get-ChildItem $ou_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-10))} | Remove-Item -force
 
-        If (!(Test-Path $script:ou_list)){
+        If (!(Test-Path $ou_list)){
             Write-host "This will take a few minutes to gather a list of OU's to search through."
             foreach($domain in (get-adforest).domains){
                 try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS)(objectclass=builtinDomain))" -server $domain | select `
-                     $hash_domain, DistinguishedName  | export-csv $script:ou_list -append -NoTypeInformation}
+                     $hash_domain, DistinguishedName  | export-csv $ou_list -append -NoTypeInformation}
                 catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
                 try{(get-addomain $domain).ComputersContainer | Get-ADObject -server $domain | select `
-                     $hash_domain, DistinguishedName | export-csv $script:ou_list -append -NoTypeInformation}
+                     $hash_domain, DistinguishedName | export-csv $ou_list -append -NoTypeInformation}
                 catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
             }
         }
 
-        $script:ous = import-csv $script:ou_list
+        $script:ous = import-csv $ou_list
     }
 }
 Function global:ADComputerswithNonStandardPrimaryGroup{

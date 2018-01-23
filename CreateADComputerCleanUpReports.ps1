@@ -56,36 +56,37 @@ from the use or distribution of the Sample Code..
  Creates reports about Active Directory Computers 
 
 #> 
-Param($reportpath = "$env:userprofile\Documents",[switch]$dontrun,[switch]$skipfunctionlist)
+Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)
 
-$reportpath = "$reportpath\ADCleanUpReports"
-If (!($(Try { Test-Path $reportpath } Catch { $true }))){
-    new-Item $reportpath -ItemType "directory"  -force
-}
-$reportpath = "$reportpath\Computers"
+$global:reportpath = "$reportpath\ADCleanUpReports"
 If (!($(Try { Test-Path $reportpath } Catch { $true }))){
     new-Item $reportpath -ItemType "directory"  -force
 }
 
-$default_err_log = $reportpath + '\err_log.txt'
+If (!($(Try { Test-Path "$reportpath\Computers" } Catch { $true }))){
+    new-Item $reportpath -ItemType "directory"  -force
+}
+
+$global:default_err_log = $reportpath + '\err_log.txt'
 $script:ous = @()
-$script:finished = @()
+$Global:finished = @()
 $global:singleuse_comp = $False
 #change current path to the report path
 cd $reportpath
+cls
 
-function DisplayFunctionResults{
+function global:DisplayFunctionResults{
     if($global:singleuse_comp){$script:finished
                 write-host "Report Can be found here $reportpath"
                 $script:finished = @()
     }
 }
-Function ADOUList{
+Function global:ADOUList{
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADOUList"
-        $script:ou_list = "$reportpath\ADOUList.csv"
+        $script:ou_list = "$reportpath\Computers\ADOUList.csv"
         Get-ChildItem $script:ou_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-10))} | Remove-Item -force
 
         If (!(Test-Path $script:ou_list)){
@@ -103,13 +104,13 @@ Function ADOUList{
         $script:ous = import-csv $script:ou_list
     }
 }
-Function ADComputerswithNonStandardPrimaryGroup{
+Function global:ADComputerswithNonStandardPrimaryGroup{
 #report_computers_with_default_primary_group_not_standard
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADComputerswithNonStandardPrimaryGroup"
-        $default_log = "$reportpath\report_ADComputerswithNonStandardPrimaryGroup.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithNonStandardPrimaryGroup.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -131,14 +132,14 @@ Function ADComputerswithNonStandardPrimaryGroup{
         }
     }
 }
-Function ADComputerswithPwdNotRequired{
+Function global:ADComputerswithPwdNotRequired{
     #report_computers_with_pwd_not_required_set
     #PASSWD_NOTREQD 0x0020 32
     [cmdletbinding()]
     param()
     process{
     write-host "Starting Function ADComputerswithPwdNotRequired"
-        $default_log = "$reportpath\report_ADComputerswithPwdNotRequired.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithPwdNotRequired.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -160,13 +161,13 @@ Function ADComputerswithPwdNotRequired{
         }
     }
 }
-Function ADComputersDisabled{
+Function global:ADComputersDisabled{
 #report_computers_disabled
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADComputersDisabled"
-        $default_log = "$reportpath\report_ADComputersDisabled.csv"
+        $default_log = "$reportpath\Computers\report_ADComputersDisabled.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -190,7 +191,7 @@ Function ADComputersDisabled{
         }
     }
 }
-Function ADComputerswithUnConstrainedDelegationEnabled{
+Function global:ADComputerswithUnConstrainedDelegationEnabled{
     #report_computers_unconstrained_delegation_enabled
     [cmdletbinding()]
     param()
@@ -198,7 +199,7 @@ Function ADComputerswithUnConstrainedDelegationEnabled{
         #TRUSTED_FOR_DELEGATION
         
         write-host "Starting Function ADComputerswithUnConstrainedDelegationEnabled"
-        $default_log = "$reportpath\report_ADComputerswithUnConstrainedDelegationEnabled.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithUnConstrainedDelegationEnabled.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -222,14 +223,14 @@ Function ADComputerswithUnConstrainedDelegationEnabled{
         }
     }
 }
-Function ADComputersWithSIDHistoryFromSameDomain{
+Function global:ADComputersWithSIDHistoryFromSameDomain{
     #report_computers_sid_history_from_same_domain
     [cmdletbinding()]
     param()
     process{
         #https://adsecurity.org/?p=1772
         write-host "Starting Function ADComputersWithSIDHistoryFromSameDomain"
-        $default_log = "$reportpath\report_ADComputersWithSIDHistoryFromSameDomain.csv"
+        $default_log = "$reportpath\Computers\report_ADComputersWithSIDHistoryFromSameDomain.csv"
         $results = @()
         #Find Computer with sid history from same domain
         if(!($script:ous)){
@@ -252,13 +253,13 @@ Function ADComputersWithSIDHistoryFromSameDomain{
         }
     }
 }
-Function ADComputerswithAdminCount{
+Function global:ADComputerswithAdminCount{
     #computers_with_admincount
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADComputerswithAdminCount"
-        $default_log = "$reportpath\report_ADComputerswithAdminCount.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithAdminCount.csv"
         $results = @()
         if(!($script:ous)){
             ADOUList
@@ -279,13 +280,13 @@ Function ADComputerswithAdminCount{
         }
     }
 }
-Function ADComputersisDeleted{
+Function global:ADComputersisDeleted{
 #report_computers_isdeleted
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADComputersisDeleted"
-        $default_log = "$reportpath\report_ADComputersisDeleted.csv"
+        $default_log = "$reportpath\Computers\report_ADComputersisDeleted.csv"
         $results = @()
         foreach($domain in (get-adforest).domains){
             try{$results += Get-ADobject -filter {objectclass -eq "computer" -and deleted -eq $true} -IncludeDeletedObject `
@@ -302,7 +303,7 @@ Function ADComputersisDeleted{
         }
     }
 }
-Function ADComputerswithCertificates{
+Function global:ADComputerswithCertificates{
 #report_computers_with certificates
     [cmdletbinding()]
     param()
@@ -310,7 +311,7 @@ Function ADComputerswithCertificates{
         #https://docs.microsoft.com/en-us/azure/active-directory/connect/active-directory-aadconnectsync-largeobjecterror-usercertificate
         
         write-host "Starting Function ADComputerswithCertificates"
-        $default_log = "$reportpath\report_ADComputerswithmorethan1Certificate.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithmorethan1Certificate.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -321,7 +322,7 @@ Function ADComputerswithCertificates{
                  -Properties admincount,enabled,usercertificate,whencreated,whenchanged `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, *}
-            catch{"function ADUserswithCertificates - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            catch{"function ADComputerswithCertificates - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         
         $results | select domain, samaccountname,$hash_usercertificatecount,admincount,enabled, `
@@ -334,7 +335,7 @@ Function ADComputerswithCertificates{
             DisplayFunctionResults
         }
         $cert_results = @()
-        $default_log = "$reportpath\report_ADComputerswithExpiredCertificates.csv"
+        $default_log = "$reportpath\Computers\report_ADComputerswithExpiredCertificates.csv"
         [int] $days = 0
         foreach($comp in $results){
             foreach($cert in $comp.usercertificate){
@@ -354,13 +355,13 @@ Function ADComputerswithCertificates{
         }
     }
 }
-Function ADComputerswithStalePWDAgeAndLastLogon{
+Function global:ADComputerswithStalePWDAgeAndLastLogon{
     #report_computers_stale
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADComputerswithStalePWDAgeAndLastLogon"
-        $default_log = "$reportpath\report_ADComputerswithStalePWDAgeAndLastLogon.csv"
+        
         $results = @()
         $DaysInactive = 90 
         $threshold_time = (Get-Date).Adddays(-($DaysInactive)).ToFileTimeUTC() 
@@ -371,18 +372,61 @@ Function ADComputerswithStalePWDAgeAndLastLogon{
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
             try{$results += get-adcomputer -Filter {(LastLogonTimeStamp -lt $threshold_time -or LastLogonTimeStamp -notlike "*") -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) -and (iscriticalsystemobject -eq $false) -and (whencreated -lt $create_time)} `
-                    -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset,enabled,whencreated `
+                    -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset,enabled,whencreated,PasswordLastSet `
                     -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") -and (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))} | `
-                    select $hash_domain, name,OperatingSystem,admincount,enabled,$hash_pwdage, `
+                    select $hash_domain, name,OperatingSystem,admincount,enabled,$hash_pwdage,PasswordLastSet, `
                         $hash_lastLogonTimestamp,whencreated,whenchanged,$hash_parentou}
             catch{"function ADComputerswithStalePWDAgeAndLastLogon - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
-        $results | export-csv $default_log -NoTypeInformation
+        $default_log = "$reportpath\Computers\report_ADWindowsComputerswithStalePWDAgeAndLastLogon.csv"
+        $results | where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") -and ` 
+            (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))} | export-csv $default_log -NoTypeInformation
+        $default_log = "$reportpath\Computers\report_ADNonWindowsComputerswithStalePWDAgeAndLastLogon.csv"
+        $results | where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -notlike "*Windows*") -and ` 
+            (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))} | export-csv $default_log -NoTypeInformation
 
-        if($results){
-            $script:finished += "Windows Computer object with passwords or lastlogon timestamps greater than $DaysInactive days: $(($results | measure).count)"
+        if($results | where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") -and `
+             (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))}){
+            $script:finished += "Windows Computer object with passwords or lastlogon timestamps greater than $DaysInactive days: $(($results | `
+             where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") -and `
+             (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))} | measure).count)"
             DisplayFunctionResults
+        }
+    }
+}
+Function global:ADComputerswithDuplicateSid{
+#report_computers_with certificates
+    [cmdletbinding()]
+    param()
+    process{
+        write-host "Starting Function ADComputerswithDuplicateSid"
+        $temp_log = "$reportpath\Computers\tmp_ADComputers.csv"
+        #https://support.microsoft.com/en-us/help/314828/the-microsoft-policy-for-disk-duplication-of-windows-installations
+        #https://support.microsoft.com/en-us/help/816099/how-to-find-and-clean-up-duplicate-security-identifiers-with-ntdsutil
+        $results = @()
+        
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
+            try{$results += get-adComputer -filter * `
+                 -Properties samaccountname, name, sid, enabled, distinguishedname `
+                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
+                    select $hash_domain, samaccountname, name, sid, enabled, distinguishedname}
+            catch{"function ADComputerswithDuplicateSid - $domain - $($_.Exception)" | out-file $default_err_log -append}
+        }
+        $results | export-csv $temp_log -NoTypeInformation
+        $default_log = "$reportpath\Computers\ADComputerswithDuplicateSid.csv"
+        If ($(Try { Test-Path $default_log} Catch { $false })){Remove-Item $default_log -force}
+        foreach($comp in ($results | sort-object -Property sid)){
+                $comp.sid
+                $lastcomp.sid
+            if($comp.sid -eq $lastcomp.sid){
+                $Comp | select domain, samaccountname, sid, enabled, `
+                @{name='OtherComputer';expression={$lastcomp.samaccountname}} | export-csv $default_log -Append -notypeinformation
+            }else{
+                $lastcomp = $comp
+            }
         }
     }
 }
@@ -419,6 +463,6 @@ if(!($importfunctionsonly)){
     write-host "Report Can be found here $reportpath"
 }else{
     $global:singleuse_comp = $True
-    write-host -foreground -yellow "Type out the function and press enter to run a particular report"
+    write-host -foreground yellow "Type out the function and press enter to run a particular report"
     (dir function: | where name -like adcomputer*).name
 }

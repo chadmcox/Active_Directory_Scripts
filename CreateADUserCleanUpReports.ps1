@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.11
+.VERSION 0.12
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.12 set functons to global.
 0.11 added switch to import all the functions and not to run the reports.
 0.10 added
     search for users with empty display name
@@ -70,35 +71,35 @@ error handling sends failed query to text file
 #> 
 Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)
 
-$reportpath = "$reportpath\ADCleanUpReports"
-If (!($(Try { Test-Path $reportpath } Catch { $true }))){
-    new-Item $reportpath -ItemType "directory"  -force
-}
-$reportpath = "$reportpath\Users"
+$global:reportpath = "$reportpath\ADCleanUpReports"
 If (!($(Try { Test-Path $reportpath } Catch { $true }))){
     new-Item $reportpath -ItemType "directory"  -force
 }
 
-$default_err_log = $reportpath + '\err_log.txt'
-$script:finished =@()
+If (!($(Try { Test-Path "$reportpath\Users" } Catch { $true }))){
+    new-Item $reportpath -ItemType "directory"  -force
+}
+
+$default_err_log = "$reportpath\Users\err_log.txt"
+$global:finished =@()
 
 
 
 $domains = (get-adforest).domains
 $global:singleuse_user = $False
 
-function DisplayFunctionResults{
+function global:DisplayFunctionResults{
     if($global:singleuse_user){$script:finished
                 write-host "Report Can be found here $reportpath"
                 $script:finished = @()
     }
 }
-Function ADOUList{
+Function global:ADOUList{
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADOUList"
-        $script:ou_list = "$reportpath\ADOUList.csv"
+        $script:ou_list = "$reportpath\Users\ADOUList.csv"
         Get-ChildItem $script:ou_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-10))} | Remove-Item -force
 
         If (!(Test-Path $script:ou_list)){
@@ -116,13 +117,13 @@ Function ADOUList{
         $script:ous = import-csv $script:ou_list
     }
 }
-Function ADUsersWithSIDHistoryFromSameDomain{
+Function global:ADUsersWithSIDHistoryFromSameDomain{
     [cmdletbinding()]
     param()
     process{
         #https://adsecurity.org/?p=1772
         write-host "Starting Function ADUsersWithSIDHistoryFromSameDomain"
-        $default_log = "$reportpath\report_ADUsersWithSIDHistoryFromSameDomain.csv"
+        $default_log = "$reportpath\Users\report_ADUsersWithSIDHistoryFromSameDomain.csv"
         $results = @()
         #Find Users with sid history from same domain
         if(!($script:ous)){
@@ -145,7 +146,7 @@ Function ADUsersWithSIDHistoryFromSameDomain{
         }
     }
 }
-Function ADUsersWithDoNotRequireKerbPreauth{
+Function global:ADUsersWithDoNotRequireKerbPreauth{
     #users_do_not_require_kerb_preauth
     [cmdletbinding()]
     param()
@@ -154,7 +155,7 @@ Function ADUsersWithDoNotRequireKerbPreauth{
         #This account does not require Kerberos pre-authentication for logging on.
 
         write-host "Starting Function ADUsersWithDoNotRequireKerbPreauth"
-        $default_log = "$reportpath\report_ADUsersWithDoNotRequireKerbPreauth.csv"
+        $default_log = "$reportpath\Users\report_ADUsersWithDoNotRequireKerbPreauth.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -175,7 +176,7 @@ Function ADUsersWithDoNotRequireKerbPreauth{
         }
     }
 }
-Function ADUsersWithStorePwdUsingReversibleEncryption{
+Function global:ADUsersWithStorePwdUsingReversibleEncryption{
     #users_store_pwd_using_reversible_encryption
     [cmdletbinding()]
     param()
@@ -184,7 +185,7 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
         #The user can send an encrypted password.
 
         write-host "Starting Function ADUsersWithStorePwdUsingReversibleEncryption"
-        $default_log = "$reportpath\report_ADUsersWithStorePwdUsingReversibleEncryption.csv"
+        $default_log = "$reportpath\Users\report_ADUsersWithStorePwdUsingReversibleEncryption.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -206,7 +207,7 @@ Function ADUsersWithStorePwdUsingReversibleEncryption{
         }
     }
 }
-Function ADUserswithUseDESKeyOnly{
+Function global:ADUserswithUseDESKeyOnly{
     #users_use_kerberos_des_enabled
     [cmdletbinding()]
     param()
@@ -214,7 +215,7 @@ Function ADUserswithUseDESKeyOnly{
         #USE_DES_KEY_ONLY 2097152
         
         write-host "Starting Function ADUserswithUseDESKeyOnly"
-        $default_log = "$reportpath\report_ADUserswithUseDESKeyOnly.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithUseDESKeyOnly.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -236,7 +237,7 @@ Function ADUserswithUseDESKeyOnly{
         }
     }
 }
-Function ADUserswithUnConstrainedDelegationEnabled{
+Function global:ADUserswithUnConstrainedDelegationEnabled{
     #unconstrained_delegation_enabled
     [cmdletbinding()]
     param()
@@ -244,7 +245,7 @@ Function ADUserswithUnConstrainedDelegationEnabled{
         #TRUSTED_FOR_DELEGATION
         
         write-host "Starting Function ADUserswithUnConstrainedDelegationEnabled"
-        $default_log = "$reportpath\report_ADUserswithUnConstrainedDelegationEnabled.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithUnConstrainedDelegationEnabled.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -268,14 +269,14 @@ Function ADUserswithUnConstrainedDelegationEnabled{
         }
     }
 }
-Function ADUserswithPwdNotSet{
+Function global:ADUserswithPwdNotSet{
     #users_pwd_never_set
     [cmdletbinding()]
     param()
     process{
         
         write-host "Starting Function ADUserswithPwdNotSet"
-        $default_log = "$reportpath\report_ADUserswithPwdNotSet.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithPwdNotSet.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -297,14 +298,14 @@ Function ADUserswithPwdNotSet{
         }
     }
 }
-Function ADUserswithPwdNotRequired{
+Function global:ADUserswithPwdNotRequired{
     #users_pwd_not_required
     #PASSWD_NOTREQD 0x0020 32
     [cmdletbinding()]
     param()
     process{
     write-host "Starting Function ADUserswithPwdNotRequired"
-        $default_log = "$reportpath\report_ADUserswithPwdNotRequired.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithPwdNotRequired.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -328,7 +329,7 @@ Function ADUserswithPwdNotRequired{
         }
     }
 }
-Function ADUserswithPwdNeverExpired{
+Function global:ADUserswithPwdNeverExpired{
     #users_pwd_never_expires
     #DONT_EXPIRE_PASSWORD 0x10000 65536
     [cmdletbinding()]
@@ -336,7 +337,7 @@ Function ADUserswithPwdNeverExpired{
     process{
 
         write-host "Starting Function ADUserswithPwdNeverExpired"
-        $default_log = "$reportpath\report_ADUserswithPwdNeverExpired.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithPwdNeverExpired.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -360,13 +361,13 @@ Function ADUserswithPwdNeverExpired{
         }
     }
 }
-Function ADUserswithAdminCount{
+Function global:ADUserswithAdminCount{
     #users_with_admincount
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithAdminCount"
-        $default_log = "$reportpath\report_ADUserswithAdminCount.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithAdminCount.csv"
         $results = @()
         if(!($script:ous)){
             ADOUList
@@ -387,13 +388,13 @@ Function ADUserswithAdminCount{
         }
     }
 }
-Function ADUserswithAdminCountandEmailorSkypeEnabled{
+Function global:ADUserswithAdminCountandEmailorSkypeEnabled{
     #users_with_admincount
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithAdminCountandEmailorSkypeEnabled"
-        $default_log = "$reportpath\report_ADUserswithAdminCountandEmailorSkypeEnabled.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithAdminCountandEmailorSkypeEnabled.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -415,14 +416,14 @@ Function ADUserswithAdminCountandEmailorSkypeEnabled{
         }
     }
 }
-Function ADUserswithStaleAdminCount{
+Function global:ADUserswithStaleAdminCount{
     #users_with_admincount
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithStaleAdminCount"
-        $orphan_log = "$reportpath\report_ADUserswithStaleAdminCount.csv"
-        $default_log = "$reportpath\report_ADUsersMembersofPrivilegedGroups.csv"
+        $orphan_log = "$reportpath\Users\report_ADUserswithStaleAdminCount.csv"
+        $default_log = "$reportpath\Users\report_ADUsersMembersofPrivilegedGroups.csv"
         #users with stale admin count
         $results = @();$orphan_results = @();$non_orphan_results  = @()
         $flagged_users = foreach($domain in (get-adforest).domains)
@@ -459,13 +460,13 @@ Function ADUserswithStaleAdminCount{
         }
     }
 }
-Function ADUserswithAdminCountnotMemberofProtectedUsersGroup{
+Function global:ADUserswithAdminCountnotMemberofProtectedUsersGroup{
     #users_with_admincount
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithAdminCountnotMemberofProtectedUsersGroup"
-        $default_log = "$reportpath\report_ADUserswithAdminCountnotMemberofProtectedUsersGroup.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithAdminCountnotMemberofProtectedUsersGroup.csv"
         #users with stale admin count
         $results = @();$not_protected_results = @();
         $flagged_users = foreach($domain in (get-adforest).domains)
@@ -500,13 +501,13 @@ Function ADUserswithAdminCountnotMemberofProtectedUsersGroup{
         }
     }
 }
-Function ADUserswithStalePWDAgeAndLastLogon{
+Function global:ADUserswithStalePWDAgeAndLastLogon{
     #stale Users
     [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithStalePWDAgeAndLastLogon"
-        $default_log = "$reportpath\report_ADUserswithStalePWDAgeAndLastLogon.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithStalePWDAgeAndLastLogon.csv"
         $results = @()
         $DaysInactive = 90 
         $threshold_time = (Get-Date).Adddays(-($DaysInactive)).ToFileTimeUTC() 
@@ -531,13 +532,13 @@ Function ADUserswithStalePWDAgeAndLastLogon{
         }
     }
 }
-Function ADUserswithNonStandardPrimaryGroup{
+Function global:ADUserswithNonStandardPrimaryGroup{
 #users_default_primary_group_membership_not_standard
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithNonStandardPrimaryGroup"
-        $default_log = "$reportpath\report_ADUserswithNonStandardPrimaryGroup.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithNonStandardPrimaryGroup.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -559,13 +560,13 @@ Function ADUserswithNonStandardPrimaryGroup{
         }
     }
 }
-Function ADUserswithAdminCountAndSPN{
+Function global:ADUserswithAdminCountAndSPN{
 #users_with_admincount_and_spn
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserswithAdminCountandSPN"
-        $default_log = "$reportpath\report_ADUserswithAdminCountandSPN.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithAdminCountandSPN.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -587,7 +588,7 @@ Function ADUserswithAdminCountAndSPN{
         }
     }
 }
-Function ADUserswithAdminCountandUnConstrainedDelegation{
+Function global:ADUserswithAdminCountandUnConstrainedDelegation{
     #users_with_admincount_and_unconstrained_delegation_enabled
     [cmdletbinding()]
     param()
@@ -595,7 +596,7 @@ Function ADUserswithAdminCountandUnConstrainedDelegation{
         #TRUSTED_FOR_DELEGATION
         
         write-host "Starting Function ADUserswithAdminCountandUnConstrainedDelegation"
-        $default_log = "$reportpath\report_ADUserswithAdminCountandUnConstrainedDelegation.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithAdminCountandUnConstrainedDelegation.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -618,13 +619,13 @@ Function ADUserswithAdminCountandUnConstrainedDelegation{
         }
     }
 }
-Function ADUserwithAdminCountandNotProtected{
+Function global:ADUserwithAdminCountandNotProtected{
 #admincount_and_account_is_sensitive_cannot_be_delegate_not_set
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserwithAdminCountandNotProtected"
-        $default_log = "$reportpath\report_ADUserwithAdminCountandNotProtected.csv"
+        $default_log = "$reportpath\Users\report_ADUserwithAdminCountandNotProtected.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -646,12 +647,12 @@ Function ADUserwithAdminCountandNotProtected{
         }
     }
 }
-Function ADUserwithAdminCountandSmartcardLogonNotRequired{
+Function global:ADUserwithAdminCountandSmartcardLogonNotRequired{
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserwithAdminCountandSmartcardLogonNotRequired"
-        $default_log = "$reportpath\report_ADUserwithAdminCountandSmartcardLogonNotRequired.csv"
+        $default_log = "$reportpath\Users\report_ADUserwithAdminCountandSmartcardLogonNotRequired.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -673,13 +674,13 @@ Function ADUserwithAdminCountandSmartcardLogonNotRequired{
         }
     }
 }
-Function ADUserPWDAge{
+Function global:ADUserPWDAge{
 #user password age report
 [cmdletbinding()]
     param()
     process{
         write-host "Starting Function ADUserPWDAge"
-        $default_log = "$reportpath\report_ADUserPWDAge.csv"
+        $default_log = "$reportpath\Users\report_ADUserPWDAge.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -711,7 +712,7 @@ Function ADUserDisabled{
     param()
     process{
         write-host "Starting Function ADUserDisabled"
-        $default_log = "$reportpath\report_ADUserDisabled.csv"
+        $default_log = "$reportpath\Users\report_ADUserDisabled.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -741,7 +742,7 @@ Function ADUserThumbnailPhotoSize{
     param()
     process{
         write-host "Starting Function ADUserThumbnailPhotoSize"
-        $default_log = "$reportpath\report_ADUserThumbnailPhotoSize.csv"
+        $default_log = "$reportpath\Users\report_ADUserThumbnailPhotoSize.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -760,7 +761,6 @@ Function ADUserThumbnailPhotoSize{
         }
         $results | export-csv $default_log -NoTypeInformation
         
-
         if($results){
             $script:finished += "User object with thumbnailphoto: $(($results | measure).count)"
             DisplayFunctionResults
@@ -773,7 +773,7 @@ Function ADUserwithEmptyUPN{
     param()
     process{
         write-host "Starting Function ADUserwithEmptyUPN"
-        $default_log = "$reportpath\report_ADUserwithEmptyUPN.csv"
+        $default_log = "$reportpath\Users\report_ADUserwithEmptyUPN.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -803,7 +803,7 @@ Function ADUserwithPSOApplied{
     param()
     process{
         write-host "Starting Function ADUserwithPSOApplied"
-        $default_log = "$reportpath\report_ADUserwithPSOApplied.csv"
+        $default_log = "$reportpath\Users\report_ADUserwithPSOApplied.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -832,7 +832,7 @@ Function ADUserwithAuthNPolicyOrSiloDefined{
     param()
     process{
         write-host "Starting Function ADUserwithAuthNPolicyOrSiloDefined"
-        $default_log = "$reportpath\report_ADUserwithAuthNPolicyOrSiloDefined.csv"
+        $default_log = "$reportpath\Users\report_ADUserwithAuthNPolicyOrSiloDefined.csv"
         $results = @()
         
         foreach($domain in (get-adforest).domains){
@@ -858,7 +858,7 @@ Function ADUsersFoundinRootofDomain{
     param()
     process{
         write-host "Starting Function ADUsersFoundinRootofDomain"
-        $default_log = "$reportpath\report_ADUsersFoundinRootofDomain.csv"
+        $default_log = "$reportpath\Users\report_ADUsersFoundinRootofDomain.csv"
         $results = @()
         foreach($domain in (get-adforest).domains){
             try{$results += Get-ADUser -Filter * `
@@ -883,7 +883,7 @@ Function ADUserswithnoDisplayName{
         #USE_DES_KEY_ONLY 2097152
         
         write-host "Starting Function ADUserswithnoDisplayName"
-        $default_log = "$reportpath\report_ADUserswithnoDisplayName.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithnoDisplayName.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -909,7 +909,7 @@ Function ADUsersisDeleted{
     param()
     process{
         write-host "Starting Function ADUsersisDeleted"
-        $default_log = "$reportpath\report_ADUsersisDeleted.csv"
+        $default_log = "$reportpath\Users\report_ADUsersisDeleted.csv"
         $results = @()
         foreach($domain in (get-adforest).domains){
             try{$results += Get-ADobject -filter {objectclass -eq "user" -and deleted -eq $true} -IncludeDeletedObject `
@@ -932,7 +932,7 @@ Function ADUserDuplicateSamAccountNameOrUPN{
     process{
         write-host "Starting Function ADUserDuplicateSamAccountNameOrUPN"
         
-        $temp_log = "$reportpath\tmp_forADUserDuplicateSamAccountNameOrUPN.csv"
+        $temp_log = "$reportpath\Users\tmp_forADUserDuplicateSamAccountNameOrUPN.csv"
         If ($(Try { Test-Path $temp_log} Catch { $false })){Remove-Item $temp_log -force}
         $users = @()
         
@@ -946,7 +946,7 @@ Function ADUserDuplicateSamAccountNameOrUPN{
             catch{"function ADUserDuplicateSamAccountNameOrUPN - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         write-host "Searching for Duplicate SAM"
-        $sam_log = "$reportpath\report_ADUserDuplicateSamAccountNameFound.csv"
+        $sam_log = "$reportpath\Users\report_ADUserDuplicateSamAccountNameFound.csv"
         If ($(Try { Test-Path $sam_log} Catch { $false })){Remove-Item $sam_log -force}
         $users = import-csv $temp_log | select * | sort-object -Property samaccountname 
         foreach($user in $Users){
@@ -959,7 +959,7 @@ Function ADUserDuplicateSamAccountNameOrUPN{
                 }
         }
         write-host "Searching for Duplicate UPN"
-        $upn_log = "$reportpath\report_ADUserDuplicateUPNFound.csv"
+        $upn_log = "$reportpath\Users\report_ADUserDuplicateUPNFound.csv"
         If ($(Try { Test-Path $upn_log} Catch { $false })){Remove-Item $upn_log -force}
         $users = import-csv $temp_log | where {$_.UserPrincipalName -like "*"} | select * | sort-object -Property UserPrincipalName
         foreach($user in $Users){
@@ -980,7 +980,7 @@ Function ADUserswithCertificates{
         #https://docs.microsoft.com/en-us/azure/active-directory/connect/active-directory-aadconnectsync-largeobjecterror-usercertificate
         
         write-host "Starting Function ADUserswithCertificates"
-        $default_log = "$reportpath\report_ADUserswithmorethan15Certificates.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithmorethan15Certificates.csv"
         $results = @()
         
         if(!($script:ous)){
@@ -993,10 +993,10 @@ Function ADUserswithCertificates{
                     select $hash_domain, *}
             catch{"function ADUserswithCertificates - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
-        $default_log = "$reportpath\report_ADUserswithmorethan15CertsinUserCertificate.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithmorethan15CertsinUserCertificate.csv"
         $results | select domain, samaccountname,$hash_usercertificatecount,admincount,enabled,PasswordExpired, `
                     PasswordLastSet,whencreated,whenchanged,$hash_parentou | where {$_.usercertificateCount -gt 15} | export-csv $default_log -NoTypeInformation
-        $default_log = "$reportpath\report_ADUserswithmorethan15SMIMECertsinUserSMIMECertificate.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithmorethan15SMIMECertsinUserSMIMECertificate.csv"
         $results | select domain, samaccountname,$hash_usersmimecount,admincount,enabled,PasswordExpired, `
                     PasswordLastSet,whencreated,whenchanged,$hash_parentou | where {$_.userSMIMECertificateCount -gt 15} | export-csv $default_log -NoTypeInformation
 
@@ -1006,7 +1006,7 @@ Function ADUserswithCertificates{
             DisplayFunctionResults
         }
         $cert_results = @()
-        $default_log = "$reportpath\report_ADUserswithExpiredCertificates.csv"
+        $default_log = "$reportpath\Users\report_ADUserswithExpiredCertificates.csv"
         [int] $days = 0
         foreach($user in $results){
             foreach($cert in $user.usercertificate){

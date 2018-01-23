@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID aed4e88b-ed60-47de-a722-9c28f1258a98
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.2 Added duplicate sid lookup
 0.1 First go around of the script
 
 .PRIVATEDATA 
@@ -54,6 +55,8 @@ from the use or distribution of the Sample Code..
 
 .DESCRIPTION 
  Creates reports about Active Directory Computers 
+
+ Use the importfunctiononly switch to run particular function / reports
 
 #> 
 Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)

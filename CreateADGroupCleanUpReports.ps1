@@ -69,7 +69,7 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 }
 
 If (!($(Try { Test-Path "$reportpath\Groups"} Catch { $true }))){
-    new-Item $reportpath -ItemType "directory"  -force
+    new-Item "$reportpath\Groups" -ItemType "directory"  -force
 }
 
 #change current path to the report path

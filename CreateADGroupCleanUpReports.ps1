@@ -544,7 +544,7 @@ $hash_parentou = @{name='ParentOU';expression={`
 cls
 
 if(!($importfunctionsonly)){
-    $time_log = "$reportpath\runtime.csv"
+    $time_log = "$reportpath\groups\runtime.csv"
     (dir function: | where name -like adgroup*).name | foreach{$script_function = $_
         Measure-Command {Invoke-Expression -Command $script_function} | `
             select @{name='RunDate';expression={get-date -format d}},`
@@ -560,4 +560,5 @@ if(!($importfunctionsonly)){
     write-host -foreground yellow "Type out the function and press enter to run a particular report"
     (dir function: | where name -like adgroup*).name
 }
- 
+    
+

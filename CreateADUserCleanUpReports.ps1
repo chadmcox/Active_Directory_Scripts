@@ -699,9 +699,9 @@ Function global:ADUserPWDAge{
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
-            $results | where {$_.PwdAgeinDays -gt 365} | export-csv "$reportpath\report_ADUserPWDAgeover1Year.csv" -NoTypeInformation
-            $results | where {$_.PwdAgeinDays -gt 1825} | export-csv "$reportpath\report_ADUserPWDAgeover5Years.csv" -NoTypeInformation
-            $results | where {$_.PwdAgeinDays -gt 3650} | export-csv "$reportpath\report_ADUserPWDAgeover10Years.csv" -NoTypeInformation
+            $results | where {$_.PwdAgeinDays -gt 365} | export-csv "$reportpath\Users\report_ADUserPWDAgeover1Year.csv" -NoTypeInformation
+            $results | where {$_.PwdAgeinDays -gt 1825} | export-csv "$reportpath\Users\report_ADUserPWDAgeover5Years.csv" -NoTypeInformation
+            $results | where {$_.PwdAgeinDays -gt 3650} | export-csv "$reportpath\Users\report_ADUserPWDAgeover10Years.csv" -NoTypeInformation
             DisplayFunctionResults
         }
     }

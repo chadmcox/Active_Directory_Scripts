@@ -71,7 +71,7 @@ error handling sends failed query to text file
 #> 
 Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)
 
-$global:reportpath = "$reportpath\ADCleanUpReports"
+$reportpath = "$reportpath\ADCleanUpReports"
 If (!($(Try { Test-Path $reportpath } Catch { $true }))){
     new-Item $reportpath -ItemType "directory"  -force
 }

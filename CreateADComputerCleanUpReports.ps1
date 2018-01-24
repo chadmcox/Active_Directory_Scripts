@@ -71,7 +71,7 @@ If (!($(Try { Test-Path "$reportpath\Computers" } Catch { $true }))){
 }
 
 $global:default_err_log = $reportpath + '\err_log.txt'
-$globalt:ous = @()
+$global:ous = @()
 $Global:finished = @()
 $global:singleuse_comp = $False
 #change current path to the report path
@@ -152,9 +152,9 @@ Function global:ADComputerswithPwdNotRequired{
             #Get-ADComputer -Filter {UserAccountControl -band 32}
             #Get-ADComputer -Filter {PasswordNotRequired -eq $True}
             try{$results += get-adcomputer -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,PasswordNotRequired,whencreated,whenchanged,operatingSystem `
+                 -Properties admincount,enabled,PasswordLastSet,PasswordNotRequired,whencreated,whenchanged,operatingSystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,operatingsystem,PasswordNotRequired,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
+                    select $hash_domain, name,operatingsystem,PasswordNotRequired,admincount,enabled,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
             catch{"function ADComputerswithPwdNotRequired - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -269,7 +269,7 @@ Function global:ADComputerswithAdminCount{
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
             
-            try{$results += get-adcomputer -Filter {admincount -eq 1 -and iscriticalsystemobject -notlike "*"}`
+            try{$results += get-adcomputer -Filter {admincount -eq 1 -and iscriticalsystemobject -eq $false}`
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,operatingsystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, name,operatingsystem,admincount,enabled,whencreated,whenchanged,$hash_parentou}
@@ -453,7 +453,7 @@ $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
 #endregion
 
 if(!($importfunctionsonly)){
-    $time_log = "$reportpath\runtime.csv"
+    $time_log = "$reportpath\computers\runtime.csv"
     (dir function: | where name -like adcomputer*).name | foreach{$script_function = $_
         Measure-Command {Invoke-Expression -Command $script_function} | `
             select @{name='RunDate';expression={get-date -format d}},`

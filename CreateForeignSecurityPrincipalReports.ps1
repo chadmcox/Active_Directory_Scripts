@@ -25,8 +25,6 @@ and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
 against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
-
-
 .TAGS msonline PowerShell
 
 .LICENSEURI 
@@ -63,8 +61,7 @@ $hash_domain = @{name='Domain';expression={$domain}}
 $results = @()
 #translate Sid
 Foreach($domain in (get-adforest).domains){
-    $results += Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -server $domain | `
-      ForEach-Object {$fsp_translate = $null
+    $results += Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -server $domain | ForEach-Object {$fsp_translate = $null
         $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
 	    $_ | select $hash_domain,name, `
         @{name='Translate';expression={$fsp_translate}}
@@ -73,14 +70,24 @@ Foreach($domain in (get-adforest).domains){
 $results | export-csv "$reportpath\report_ForeignSecurityPricipals.csv" -NoTypeInformation
 $results = @()
 #enumerate fsp members
-Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof -PipelineVariable fsp | `
-  select -ExpandProperty memberof | foreach{
-    $group = $_
-    $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
-    $results += $fsp | select $hash_domain,name, `
-        @{name='Translate';expression={$fsp_translate}}, `
-        @{name='Memberof';expression={$group}}
+Foreach($domain in (get-adforest).domains){
+    Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof -server $domain -PipelineVariable fsp | select -ExpandProperty memberof | foreach{
+        $group = $_
+        $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
+        $results += $fsp | select $hash_domain,name, `
+            @{name='Translate';expression={$fsp_translate}}, `
+            @{name='Memberof';expression={$group}}
+    }
 }
 
 $results | export-csv "$reportpath\report_ForeignSecurityPricipalsGroupMembership.csv" -NoTypeInformation
-write-host "Report Can be found here $reportpath"
+$results = @()
+#translate Sid
+Foreach($domain in (get-adforest).domains){
+    $results += Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain | ForEach-Object {$fsp_translate = $null
+        $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
+	    $_ | select $hash_domain,name, `
+        @{name='Translate';expression={$fsp_translate}}
+    }
+}
+$results | export-csv "$reportpath\report_ForeignSecurityPricipalsNoGroupMemberShips.csv" -NoTypeInformation

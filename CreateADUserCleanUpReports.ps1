@@ -77,7 +77,7 @@ If (!($(Try { Test-Path $reportpath } Catch { $true }))){
 }
 
 If (!($(Try { Test-Path "$reportpath\Users" } Catch { $true }))){
-    new-Item $reportpath -ItemType "directory"  -force
+    new-Item "$reportpath\Users" -ItemType "directory"  -force
 }
 
 $default_err_log = "$reportpath\Users\err_log.txt"

@@ -25,6 +25,8 @@ and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
 against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
+
+
 .TAGS msonline PowerShell
 
 .LICENSEURI 
@@ -81,3 +83,4 @@ Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties 
 }
 
 $results | export-csv "$reportpath\report_ForeignSecurityPricipalsGroupMembership.csv" -NoTypeInformation
+write-host "Report Can be found here $reportpath"

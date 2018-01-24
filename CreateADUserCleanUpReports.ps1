@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.12
+.VERSION 0.13
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -1047,7 +1047,7 @@ $hash_usersmimecount = @{Name="userSMIMECertificateCount";Expression={$_.userSMI
 
 
 if(!($importfunctionsonly)){
-    $time_log = "$reportpath\runtime.csv"
+    $time_log = "$reportpath\users\runtime.csv"
     (dir function: | where name -like aduser*).name | foreach{$script_function = $_
         Measure-Command {Invoke-Expression -Command $script_function} | `
             select @{name='RunDate';expression={get-date -format d}},`

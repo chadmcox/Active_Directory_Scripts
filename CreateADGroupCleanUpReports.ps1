@@ -63,7 +63,7 @@ from the use or distribution of the Sample Code..
 #> 
 Param($reportpath = "$env:userprofile\Documents",[switch]$importfunctionsonly)
 
-$global:reportpath = "$reportpath\ADCleanUpReports"
+$reportpath = "$reportpath\ADCleanUpReports"
 If (!($(Try { Test-Path $reportpath } Catch { $true }))){
     new-Item $reportpath -ItemType "directory"  -force
 }

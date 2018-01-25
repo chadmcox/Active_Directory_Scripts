@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID bff8254c-d342-4d67-876e-378d5ba57447
 
@@ -25,7 +25,7 @@ and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
 against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
-.TAGS msonline PowerShell
+.TAGS Active Directory PowerShell Foreign Security Principals
 
 .LICENSEURI 
 
@@ -40,6 +40,9 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+ 0.2 fixed to make sure it enumerates each domain
+    does a trust domain sid check to make sure trust is still valid
+    removes builtin sids from report
 
 
 .PRIVATEDATA 
@@ -61,10 +64,14 @@ $hash_domain = @{name='Domain';expression={$domain}}
 $results = @()
 #translate Sid
 Foreach($domain in (get-adforest).domains){
-    $results += Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -server $domain | ForEach-Object {$fsp_translate = $null
+    $trusted_domain_SIDs = (get-adtrust -filter {intraforest -eq $false} -Properties securityIdentifier -server $domain).securityIdentifier.value
+    Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -server $domain | ForEach {$fsp_translate = $null
+        if($_.Name -match "^S-\d-\d+-\d+-\d+-\d+-\d+"){$domain_sid = $matches[0]}else{$domain_sid = $null}
         $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
-	    $_ | select $hash_domain,name, `
-        @{name='Translate';expression={$fsp_translate}}
+	    $results += $_ | select $hash_domain,name, `
+            @{name='Translate';expression={$fsp_translate}}, `
+            @{name='TrustExist';expression={if($trusted_domain_SIDs -like $domain_sid){$True}}} | `
+            where {$_.name -notmatch "^S-\d-\d+-(\d+)$"}
     }
 }
 $results | export-csv "$reportpath\report_ForeignSecurityPricipals.csv" -NoTypeInformation
@@ -76,7 +83,8 @@ Foreach($domain in (get-adforest).domains){
         $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
         $results += $fsp | select $hash_domain,name, `
             @{name='Translate';expression={$fsp_translate}}, `
-            @{name='Memberof';expression={$group}}
+            @{name='Memberof';expression={$group}} | `
+            where {$_.name -notmatch "^S-\d-\d+-(\d+)$"}
     }
 }
 
@@ -87,7 +95,8 @@ Foreach($domain in (get-adforest).domains){
     $results += Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain | ForEach-Object {$fsp_translate = $null
         $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
 	    $_ | select $hash_domain,name, `
-        @{name='Translate';expression={$fsp_translate}}
+        @{name='Translate';expression={$fsp_translate}} | `
+            where {$_.name -notmatch "^S-\d-\d+-(\d+)$"}
     }
 }
 $results | export-csv "$reportpath\report_ForeignSecurityPricipalsNoGroupMemberShips.csv" -NoTypeInformation

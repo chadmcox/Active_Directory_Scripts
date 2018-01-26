@@ -95,7 +95,8 @@ Function global:ADOUList{
         If (!(Test-Path $ou_list)){
             Write-host "This will take a few minutes to gather a list of OU's to search through."
             foreach($domain in (get-adforest).domains){
-                try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS)(objectclass=builtinDomain))" -server $domain | select `
+                try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS)(objectclass=builtinDomain))" `
+                    -Properties "msds-approx-immed-subordinates" -server $domain | where {$_."msds-approx-immed-subordinates" -ne 0} | select `
                      $hash_domain, DistinguishedName  | export-csv $ou_list -append -NoTypeInformation}
                 catch{"function ADOUList - $domain - $($_.Exception)" | out-file $default_err_log -append}
                 try{(get-addomain $domain).ComputersContainer | Get-ADObject -server $domain | select `

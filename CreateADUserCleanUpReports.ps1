@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.13
+.VERSION 0.14
 
 .GUID c7ffb7da-8352-4a04-9920-4eca7929fba9
 
@@ -706,7 +706,7 @@ Function global:ADUserPWDAge{
         }
     }
 }
-Function ADUserDisabled{
+Function global:ADUserDisabled{
 #disabled User
 [cmdletbinding()]
     param()
@@ -736,7 +736,7 @@ Function ADUserDisabled{
         }
     }
 }
-Function ADUserThumbnailPhotoSize{
+Function global:ADUserThumbnailPhotoSize{
 #thumbnail photosize
 [cmdletbinding()]
     param()
@@ -767,7 +767,7 @@ Function ADUserThumbnailPhotoSize{
         }
     }
 }
-Function ADUserwithEmptyUPN{
+Function global:ADUserwithEmptyUPN{
 #is UPN Empty
 [cmdletbinding()]
     param()
@@ -798,7 +798,7 @@ Function ADUserwithEmptyUPN{
         }
     }
 }
-Function ADUserwithPSOApplied{
+Function global:ADUserwithPSOApplied{
 [cmdletbinding()]
     param()
     process{
@@ -827,7 +827,7 @@ Function ADUserwithPSOApplied{
         }
     }
 }
-Function ADUserwithAuthNPolicyOrSiloDefined{
+Function global:ADUserwithAuthNPolicyOrSiloDefined{
 [cmdletbinding()]
     param()
     process{
@@ -853,7 +853,7 @@ Function ADUserwithAuthNPolicyOrSiloDefined{
         }
     }
 }
-Function ADUsersFoundinRootofDomain{
+Function global:ADUsersFoundinRootofDomain{
 [cmdletbinding()]
     param()
     process{
@@ -876,7 +876,7 @@ Function ADUsersFoundinRootofDomain{
         }
     }
 }
-Function ADUserswithnoDisplayName{
+Function global:ADUserswithnoDisplayName{
     [cmdletbinding()]
     param()
     process{
@@ -904,7 +904,7 @@ Function ADUserswithnoDisplayName{
         }
     }
 }
-Function ADUsersisDeleted{
+Function global:ADUsersisDeleted{
 [cmdletbinding()]
     param()
     process{
@@ -926,7 +926,7 @@ Function ADUsersisDeleted{
         }
     }
 }
-Function ADUserDuplicateSamAccountNameOrUPN{
+Function global:ADUserDuplicateSamAccountNameOrUPN{
 [cmdletbinding()]
     param()
     process{
@@ -973,7 +973,7 @@ Function ADUserDuplicateSamAccountNameOrUPN{
         }
     }
 }
-Function ADUserswithCertificates{
+Function global:ADUserswithCertificates{
     [cmdletbinding()]
     param()
     process{
@@ -1012,7 +1012,7 @@ Function ADUserswithCertificates{
             foreach($cert in $user.usercertificate){
                 $converted = [System.Security.Cryptography.X509Certificates.X509Certificate2] $cert
                 if ($converted.NotAfter -lt [datetime]::Today.AddDays($days)) {
-                    $cert_results += $user | select $hash_domain, samaccountname, `
+                    $cert_results += $user | select domain, samaccountname, `
                     @{name='CertThumbprint';expression={$converted.Thumbprint}},`
                     @{name='CertExpired';expression={$converted.NotAfter}}, `
                     admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
@@ -1022,6 +1022,38 @@ Function ADUserswithCertificates{
         $cert_results | export-csv $default_log -NoTypeInformation
         if($cert_results){
             $script:finished += "User objects with expired certificate in usercertificate attribute : $(($cert_results | measure).count)"
+            DisplayFunctionResults
+        }
+    }
+}
+Function global:ADUserwithCredentialRoaming{
+#is Credential roaming enabled
+[cmdletbinding()]
+    param()
+    process{
+        #https://social.technet.microsoft.com/wiki/contents/articles/11483.credential-roaming.aspx#Deploying_Group_Policy_for_Credential_Roaming
+        write-host "Starting Function ADUserwithCredentialRoaming"
+        $default_log = "$reportpath\Users\report_ADUserwithCredentialRoaming.csv"
+        $results = @()
+        
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
+            
+            try{$results += get-aduser -ldapFilter "(|(msPKIAccountCredentials=*)(msPKIRoamingTimeStamp=*)(msPKIDPAPIMasterKeys=*))" `
+                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,`
+                    PasswordNeverExpires,CannotChangePassword,whenchanged,PwdLastSet,whencreated,whenchanged `
+                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
+                    select $hash_domain, samaccountname, userprincipalname, `
+                        admincount,enabled,PasswordExpired,`
+                        PasswordLastSet,LastLogonDate,whenchanged,whencreated,$hash_parentou}
+            catch{"function ADUserwithCredentialRoaming - $domain - $($_.Exception)" | out-file $default_err_log -append}
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        if($results){
+            $script:finished += "User object with Crednetial Roaming Enabled: $(($results | measure).count)"
             DisplayFunctionResults
         }
     }

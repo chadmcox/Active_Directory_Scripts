@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.11
+.VERSION 0.12
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.12 move the circular nesting check to be the last thing ran.  was causing a timeout.
 0.11 had to make functions global also added direct member count
 0.10 put in option to just import script so only certain functions can be ran
 0.9 Search for objects in root level of domain
@@ -545,7 +546,7 @@ cls
 
 if(!($importfunctionsonly)){
     $time_log = "$reportpath\groups\runtime.csv"
-    (dir function: | where name -like adgroup*).name | foreach{$script_function = $_
+    (dir function: | where {$_.name -like "adgroup*" -and $_.name -ne "ADGroupsWithCircularNesting"} ).name | sort | foreach{$script_function = $_
         Measure-Command {Invoke-Expression -Command $script_function} | `
             select @{name='RunDate';expression={get-date -format d}},`
             @{name='Function';expression={$script_function}}, `
@@ -553,6 +554,14 @@ if(!($importfunctionsonly)){
             @{name='Minutes';expression={$_.Minutes}}, `
             @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
     }
+    #this one takes the longest broke it out and have it running last
+    Measure-Command {ADGroupsWithCircularNesting} | `
+        select @{name='RunDate';expression={get-date -format d}},`
+        @{name='Function';expression={"ADGroupsWithCircularNesting"}}, `
+        @{name='Hours';expression={$_.hours}}, `
+        @{name='Minutes';expression={$_.Minutes}}, `
+        @{name='Seconds';expression={$_.Seconds}} | export-csv $time_log -append -notypeinformation
+    
     $script:finished
     write-host "Report Can be found here $reportpath"
 }else{

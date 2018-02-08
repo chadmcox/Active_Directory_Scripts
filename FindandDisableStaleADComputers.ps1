@@ -1,7 +1,23 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.SYNOPSIS
+
+
+.DESCRIPTION 
+ This script finds all stale windows computers in active directory and disables them. 
+ use the reportonly switch just to get a list of computers that will get disabled.
+
+ !!!remove the -whatif after you test it.
+
+.EXAMPLE
+.\Findanddisablestaleadcomputers.ps1 
+
+.\Findanddisablestaleadcomputers.ps1 -reportonly
+
+.\Findanddisablestaleadcomputers.ps1 -$DaysInactive 120
+
+.VERSION 0.2
 
 .GUID 2b49ab62-9f8e-4542-b890-329b42c15d75
 
@@ -42,18 +58,16 @@ from the use or distribution of the Sample Code..
 .RELEASENOTES
 
 
-.PRIVATEDATA 
+.PRIVATEDATA
+
 
 #>
 
 #Requires -Module ActiveDirectory
+#Requires -version 4.0
+#Requires -RunAsAdministrator
 
-<# 
 
-.DESCRIPTION 
- This script finds all stale windows computers in active directory and disables them. 
-
-#> 
 Param($DaysInactive=90,$reportpath = "$env:userprofile\Documents",[switch]$reportonly)
 
 $default_err_log = $reportpath + '\err_log.txt'
@@ -113,7 +127,7 @@ $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
     Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
 $hash_domain = @{Name="Domain";
     Expression={$domain}}
-$hash_ParentOU = @{Name="ParentOU";
-    Expression={$_.distinguishedname.Substring($_.samaccountname.Length + 3)}}
+$hash_parentou = @{name='ParentOU';expression={`
+    $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
 
 ADComputerswithStalePWDAgeAndLastLogon

@@ -53,11 +53,18 @@ from the use or distribution of the Sample Code..
 <# 
 
 .DESCRIPTION 
- This script will look for users that have no password set and disabled them if they are older than 60 days. 
+ This script will look for users that have no password set and disabled them if they are older than 60 days.
+ 
+ !!!remove the -whatif after you test it.
+
+.EXAMPLE
+.\FindanddisableADUserswithnoPassword.ps1 
+
+.\FindanddisableADUserswithnoPassword.ps1 -reportonly
 
 #> 
 [cmdletbinding()]
-Param($DaysInactive=60,$reportpath = "$env:userprofile\Documents",[switch]$reportonly)
+Param($DaysInactive=0,$reportpath = "$env:userprofile\Documents",[switch]$reportonly)
 
 
 $default_log = "$reportpath\report_ADUserswithPwdNotSet.csv"
@@ -75,12 +82,15 @@ Function ADUserswithPwdNotSet{
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (iscriticalsystemobject -notlike "*") `
+            try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (iscriticalsystemobject -notlike "*") 
                 -and (whencreated -lt $ctime)} `
-                -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged `
+                -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated,whenchanged,"msDS-ReplAttributeMetaData" `
                 -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled, `
-                        PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
+                        PasswordExpired,$hash_pwdLastSet,@{name='MetapwdLastSet';expression={($_ | `
+                        Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA |`
+                        where { $_.pszAttributeName -eq "pwdLastSet"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `
+                        $hash_whencreated,$hash_parentou}
             catch{"function ADUserswithPwdNotSet - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -89,7 +99,7 @@ Function ADUserswithPwdNotSet{
             write-host "Found $(($results | measure).count) user object with password not set."
             write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
             if(!($reportonly)){
-                DisableADUsers
+                #DisableADUsers
             }
         }
         
@@ -99,21 +109,28 @@ Function DisableADUsers{
     [cmdletbinding()]
     param()
     process{
-        write-host "Starting Function FixStaleAdminCount"
+        write-host "Disabling AD Users"
         If (!($(Try { Test-Path $default_log } Catch { $true }))){
             write-host "report not found in location: $default_log"
         }else{
             $last_domain = $null
             import-csv $default_log | where {$_.enabled -eq $True} | foreach{
-                try{Disable-ADAccount ($_).samaccountname -server ($_).domain}
+                try{Disable-ADAccount ($_).samaccountname -server ($_).domain -whatif}
                 catch{"Failed"; "$(Get-Date) - $_.domain - Failed to disable $(($_).samaccountname) - $($_.Exception)" | `
-                out-file $default_err_log -append}
+                    out-file $default_err_log -append}
             }
         }
     }
 }
 
-$hash_domain = @{name='Domain';expression={$domain}}
+$hash_whencreated = @{Name="whencreated";
+    Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
+$hash_pwdLastSet = @{Name="pwdLastSet";
+    Expression={if($_.PwdLastSet -ne 0){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
+$hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
+    Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
+$hash_domain = @{Name="Domain";
+    Expression={$domain}}
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
 

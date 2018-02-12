@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.12
+.VERSION 0.13
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.13 cleaned up dates
 0.12 move the circular nesting check to be the last thing ran.  was causing a timeout.
 0.11 had to make functions global also added direct member count
 0.10 put in option to just import script so only certain functions can be ran
@@ -127,7 +128,7 @@ function global:ADPrivilegedGroupsWithSidHistory{
                  -properties samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject, `
                     whencreated,whenchanged,description,managedby | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,iscriticalsystemobject,`
-                    whencreated,whenchanged,description,managedby,$hash_parentou
+                    $hash_whenchanged,$hash_whencreated,description,managedby,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -155,7 +156,7 @@ function global:ADGroupsWithNoMembers{
                  -properties samaccountname,Name,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,whencreated,whenchanged,description,managedby,`
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,description,managedby,`
                     @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}},`
                     $hash_parentou,distinguishedname | `
                 where {$_.Rid -gt 1000}
@@ -277,7 +278,7 @@ function global:ADGroupsWithSIDHistoryFromSameDomain{
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,SIDHistory | `
                 Where { $_.SIDHistory -Like "$domain_sid-*"} | `
                     select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,whencreated,whenchanged,description,managedby,$hash_parentou
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,description,managedby,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -349,7 +350,7 @@ function global:ADGroupsNeverUsed{
                 -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory,description,managedby,objectSid `
                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                 where {(!($_."msDS-ReplValueMetaData"))} | `
-                select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,`
+                select $hash_domain,name,samaccountname,groupcategory,groupscope,$hash_whencreated,`
                     @{name='AgeinDays';expression={(new-TimeSpan($($_.whencreated)) $(Get-Date)).days}},`
                     isCriticalSystemObject,description,managedby,`
                     @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}},`
@@ -380,7 +381,7 @@ function global:ADGroupswhenMembershipsLastChange{
                     -Properties "msDS-ReplValueMetaData",samaccountname,GroupCategory,GroupScope,"msDS-ReplValueMetaData",`
                         WhenCreated,WhenChanged,description,managedby,objectSid,admincount -server $domain `
                 -searchbase $object_location -SearchScope OneLevel | `
-                    select $hash_domain,samaccountname,groupcategory,groupscope,whencreated,whenchanged,`
+                    select $hash_domain,samaccountname,groupcategory,groupscope,$hash_whencreated,$hash_whenchanged,`
                         @{name='MembershipLastChanged';expression={($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" }}| select -first 1).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}},`
                         isCriticalSystemObject,admincount,description,managedby,$hash_parentou
             }
@@ -407,7 +408,7 @@ function global:ADGroupsAssignedbyAMACertificate{
         $results = get-adobject -filter {objectclass -eq "msPKI-Enterprise-Oid"} -properties * `
                      -searchbase $((get-adrootdse).configurationnamingcontext) | `
                             where {($_."msDS-OIDToGroupLink")} | `
-                        select DisplayName, msDS-OIDToGroupLink,DistinguishedName,whenChanged,whenCreated 
+                        select DisplayName, msDS-OIDToGroupLink,$hash_whenChanged,$hash_whenCreated,DistinguishedName 
         $results | export-csv $default_log -NoTypeInformation
 
         if($results){
@@ -428,7 +429,7 @@ function global:ADGroupswithPSOApplied{
             $results += get-adgroup -LDAPFilter "(msDS-PSOApplied=*)" `
                 -Properties "msDS-PSOApplied",whencreated,groupscope,groupcategory, `
                     description,managedby,objectSid,isCriticalSystemObject -server $domain | `
-                select $hash_domain,samaccountname,groupcategory,groupscope,whencreated,"msDS-PSOApplied",`
+                select $hash_domain,samaccountname,groupcategory,groupscope,$hash_whencreated,"msDS-PSOApplied",`
                     isCriticalSystemObject,$hash_parentou,description,managedby
 
         }
@@ -450,7 +451,7 @@ Function global:ADGroupsFoundinRootofDomain{
             try{$results += Get-ADGroup -Filter * `
                 -searchbase $((get-adobject -LDAPFilter '(objectclass=domainDNS)' -server $domain).distinguishedname) `
                     -SearchScope OneLevel -server $domain -Properties whencreated,samaccountname | `
-                    Select $hash_domain,samaccountname, whencreated}
+                    Select $hash_domain,samaccountname, $hash_whencreated}
             catch{"function ADGroupsFoundinRootofDomain - $domain - $($_.Exception)" | out-file $default_err_log -append}     
         }
         
@@ -485,7 +486,7 @@ function global:ADGroupsWithNoDisplayName{
                  -properties samaccountname,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,whencreated,whenchanged,description,managedby,`
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,description,managedby,`
                     @{name='Rid';expression={$([int]($_.objectsid -split("-"))[7])}},`
                     $hash_parentou | `
                 where {$_.Rid -gt 1000}
@@ -521,7 +522,7 @@ function global:ADGroupsMemberCount{
                  -properties samaccountname,groupscope,groupcategory,admincount,member,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,whencreated,whenchanged,`
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,`
                     @{name='DirectMemberCount';expression={($_.Member).count}},`
                     description,managedby,$hash_parentou
         }
@@ -541,6 +542,10 @@ function global:ADGroupsMemberCount{
 $hash_domain = @{name='Domain';expression={$domain}}
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
+$hash_whenchanged = @{Name="whenchanged";
+    Expression={($_.whenchanged).ToString('MM/dd/yyyy')}}
+$hash_whencreated = @{Name="whencreated";
+    Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
 #endregion
 
 cls

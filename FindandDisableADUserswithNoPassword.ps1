@@ -84,13 +84,14 @@ Function ADUserswithPwdNotSet{
         foreach($domain in (get-adforest).domains){
             try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (iscriticalsystemobject -notlike "*") 
                 -and (whencreated -lt $ctime)} `
-                -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated,whenchanged,"msDS-ReplAttributeMetaData" `
+                -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated, `
+                    whenchanged,"msDS-ReplAttributeMetaData",lastLogonTimestamp `
                 -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled, `
                         PasswordExpired,$hash_pwdLastSet,@{name='MetapwdLastSet';expression={($_ | `
                         Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA |`
                         where { $_.pszAttributeName -eq "pwdLastSet"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `
-                        $hash_whencreated,$hash_parentou}
+                        $hash_lastLogonTimestamp,$hash_whencreated,$hash_parentou}
             catch{"function ADUserswithPwdNotSet - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation

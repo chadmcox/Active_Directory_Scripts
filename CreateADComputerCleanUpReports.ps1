@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 0.3
 
 .GUID aed4e88b-ed60-47de-a722-9c28f1258a98
 
@@ -40,6 +40,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.3 date cleanup
 0.2 Added duplicate sid lookup
 0.1 First go around of the script
 
@@ -122,11 +123,15 @@ Function global:ADComputerswithNonStandardPrimaryGroup{
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
             
-            try{$results += get-adcomputer -Filter {primaryGroupID -ne 515 -and enabled -eq "True" -and iscriticalsystemobject -eq $false}`
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,primaryGroupID,primaryGroup,whencreated,whenchanged,operatingSystem `
+            try{$results += get-adcomputer -Filter {primaryGroupID -ne 515 -and enabled -eq "True" 
+                                -and iscriticalsystemobject -eq $false}`
+                 -Properties admincount,enabled,primaryGroupID, `
+                    primaryGroup,whencreated,whenchanged,operatingSystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,operatingsystem,admincount,enabled,primaryGroupID,primaryGroup,whencreated,whenchanged,$hash_parentou}
-            catch{"function ADComputerswithNonStandardPrimaryGroup - $domain - $($_.Exception)" | out-file $default_err_log -append}
+                    select $hash_domain, name,operatingsystem,admincount,enabled,primaryGroupID, `
+                        primaryGroup,$hash_whencreated,$hash_whenchanged,$hash_parentou}
+            catch{"function ADComputerswithNonStandardPrimaryGroup - $domain - $($_.Exception)" | `
+                out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -153,9 +158,10 @@ Function global:ADComputerswithPwdNotRequired{
             #Get-ADComputer -Filter {UserAccountControl -band 32}
             #Get-ADComputer -Filter {PasswordNotRequired -eq $True}
             try{$results += get-adcomputer -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(IsCriticalSystemObject=TRUE)))"`
-                 -Properties admincount,enabled,PasswordLastSet,PasswordNotRequired,whencreated,whenchanged,operatingSystem `
+                 -Properties admincount,enabled,pwdlastset,PasswordNotRequired,whencreated,whenchanged,operatingSystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,operatingsystem,PasswordNotRequired,admincount,enabled,PasswordLastSet,whencreated,whenchanged,$hash_parentou}
+                    select $hash_domain, name,operatingsystem,PasswordNotRequired,admincount, `
+                        enabled,$hash_pwdlastset,$hash_whencreated,$hash_whenchanged,$hash_parentou}
             catch{"function ADComputerswithPwdNotRequired - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -180,11 +186,12 @@ Function global:ADComputersDisabled{
         foreach($ou in $script:ous){$domain = ($ou).domain
             
             try{$results += get-adcomputer -Filter {(Enabled -eq $false) -and (iscriticalsystemobject -eq $false)} `
-                 -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,LastLogonDate,operatingSystem, `
+                 -Properties admincount,enabled,PasswordExpired,whencreated,LastLogontimestamp,operatingSystem, `
                     PasswordNeverExpires,CannotChangePassword,whencreated,whenchanged,PwdLastSet,"msDS-ReplAttributeMetaData" `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, name,operatingsystem,admincount,enabled,`
-                        PasswordLastSet,LastLogonDate,$hash_uacchanged,whenchanged,whencreated,$hash_parentou}
+                        $hash_uacchanged,$hash_pwdlastset, `
+                        $hash_lastLogonTimestamp,$hash_whencreated,$hash_whenchanged,$hash_parentou}
             catch{"function ADComputerDisabled - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -215,8 +222,10 @@ Function global:ADComputerswithUnConstrainedDelegationEnabled{
             try{$results += get-adcomputer -LDAPFilter "(&(userAccountControl:1.2.840.113556.1.4.803:=524288)(!(IsCriticalSystemObject=TRUE)))"`
                  -Properties admincount,enabled,Trustedfordelegation,whencreated,whenchanged,operatingSystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,operatingsystem,Trustedfordelegation,admincount,enabled,whencreated,whenchanged,$hash_parentou}
-            catch{"function ADComputerswithUnConstrainedDelegationEnabled - $domain - $($_.Exception)" | out-file $default_err_log -append}
+                    select $hash_domain, name,operatingsystem,Trustedfordelegation,admincount,enabled, `
+                    $hash_whenchanged,$hash_whencreated,$hash_parentou}
+            catch{"function ADComputerswithUnConstrainedDelegationEnabled - $domain - $($_.Exception)" | `
+                out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -243,10 +252,10 @@ Function global:ADComputersWithSIDHistoryFromSameDomain{
         foreach($ou in $script:ous){$domain = ($ou).domain
             [string]$Domain_SID = ((Get-ADDomain $domain).DomainSID.Value)
             try{$results += Get-ADComputer -Filter {SIDHistory -Like '*'} `
-                -Properties SIDHistory,admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,operatingsystem `
+                -Properties SIDHistory,admincount,enabled,PasswordExpired,pwdlastset,whencreated,whenchanged,operatingsystem `
                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                 Where { $_.SIDHistory -Like "$domain_sid-*"} | `
-                    select $hash_domain, name,operatingsystem,admincount,enabled,whencreated,whenchanged,$hash_parentou}
+                    select $hash_domain, name,operatingsystem,admincount,enabled,$hash_whenchanged,$hash_whencreated,$hash_parentou}
             catch{"function ADComputersWithSIDHistoryFromSameDomain - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -273,7 +282,7 @@ Function global:ADComputerswithAdminCount{
             try{$results += get-adcomputer -Filter {admincount -eq 1 -and iscriticalsystemobject -eq $false}`
                  -Properties admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,operatingsystem `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,operatingsystem,admincount,enabled,whencreated,whenchanged,$hash_parentou}
+                    select $hash_domain, name,operatingsystem,admincount,enabled,$hash_whenchanged,$hash_whencreated,$hash_parentou}
             catch{"function ADcomputerswithAdminCount - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -295,7 +304,7 @@ Function global:ADComputersisDeleted{
         foreach($domain in (get-adforest).domains){
             try{$results += Get-ADobject -filter {objectclass -eq "computer" -and deleted -eq $true} -IncludeDeletedObject `
                 -server $domain -Properties whencreated,samaccountname,Deleted,operatingsystem | `
-                    Select $hash_domain,name, operatingsystem,whencreated, Deleted,distinguishedname}
+                    Select $hash_domain,name, operatingsystem,$hash_whencreated, Deleted,distinguishedname}
             catch{"function ADComputersisDeleted - $domain - $($_.Exception)" | out-file $default_err_log -append}     
         }
         
@@ -326,14 +335,16 @@ Function global:ADComputerswithCertificates{
                  -Properties admincount,enabled,usercertificate,whencreated,whenchanged `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, *}
-            catch{"function ADComputerswithCertificates - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            catch{"function ADComputerswithCertificates - $domain - $($_.Exception)" | `
+                out-file $default_err_log -append}
         }
         
         $results | select domain, samaccountname,$hash_usercertificatecount,admincount,enabled, `
-            whencreated,whenchanged,$hash_parentou | where {$_.usercertificateCount -gt 1} | export-csv $default_log -NoTypeInformation
+            $hash_whenchanged,$hash_whencreated,$hash_parentou | where {$_.usercertificateCount -gt 1} | `
+                export-csv $default_log -NoTypeInformation
         
 
-        if($results | where {$_.usercertificateCount -gt 15}){
+        if($results | where {$_.usercertificateCount -gt 1}){
             
             $script:finished += "Computer found with more than 1 certificates in usercertificate attribute"
             DisplayFunctionResults
@@ -348,7 +359,7 @@ Function global:ADComputerswithCertificates{
                     $cert_results += $comp | select $hash_domain, samaccountname, `
                     @{name='CertThumbprint';expression={$converted.Thumbprint}},`
                     @{name='CertExpired';expression={$converted.NotAfter}}, `
-                    admincount,enabled,PasswordExpired,PasswordLastSet,whencreated,whenchanged,$hash_parentou
+                    admincount,enabled,PasswordExpired,$hash_pwdLastSet,$hash_whenchanged,$hash_whencreated,$hash_parentou
                 }
             }
         }
@@ -375,12 +386,16 @@ Function global:ADComputerswithStalePWDAgeAndLastLogon{
             ADOUList
         }
         foreach($ou in $script:ous){$domain = ($ou).domain
-            try{$results += get-adcomputer -Filter {(LastLogonTimeStamp -lt $threshold_time -or LastLogonTimeStamp -notlike "*") -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) -and (iscriticalsystemobject -eq $false) -and (whencreated -lt $create_time)} `
-                    -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset,enabled,whencreated,PasswordLastSet `
+            try{$results += get-adcomputer -Filter {(LastLogonTimeStamp -lt $threshold_time -or LastLogonTimeStamp -notlike "*") 
+                                -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) 
+                                -and (iscriticalsystemobject -eq $false) -and (whencreated -lt $create_time)} `
+                    -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset, `
+                        enabled,whencreated, `
                     -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
-                    select $hash_domain, name,OperatingSystem,admincount,enabled,$hash_pwdage,PasswordLastSet, `
-                        $hash_lastLogonTimestamp,whencreated,whenchanged,$hash_parentou}
-            catch{"function ADComputerswithStalePWDAgeAndLastLogon - $domain - $($_.Exception)" | out-file $default_err_log -append}
+                    select $hash_domain, name,OperatingSystem,admincount,enabled,$hash_pwdage,$hash_pwdlastset, `
+                        $hash_lastLogonTimestamp,$hash_whencreated,$hash_whenchanged,$hash_parentou}
+            catch{"function ADComputerswithStalePWDAgeAndLastLogon - $domain - $($_.Exception)" | `
+                out-file $default_err_log -append}
         }
         $default_log = "$reportpath\Computers\report_ADWindowsComputerswithStalePWDAgeAndLastLogon.csv"
         $results | where {($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") -and ` 
@@ -417,7 +432,8 @@ Function global:ADComputerswithDuplicateSid{
                  -Properties samaccountname, name, sid, enabled, distinguishedname `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, samaccountname, name, sid, enabled, distinguishedname}
-            catch{"function ADComputerswithDuplicateSid - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            catch{"function ADComputerswithDuplicateSid - $domain - $($_.Exception)" | `
+                out-file $default_err_log -append}
         }
         $results | export-csv $temp_log -NoTypeInformation
         $default_log = "$reportpath\Computers\ADComputerswithDuplicateSid.csv"
@@ -427,7 +443,8 @@ Function global:ADComputerswithDuplicateSid{
                 $lastcomp.sid
             if($comp.sid -eq $lastcomp.sid){
                 $Comp | select domain, samaccountname, sid, enabled, `
-                @{name='OtherComputer';expression={$lastcomp.samaccountname}} | export-csv $default_log -Append -notypeinformation
+                @{name='OtherComputer';expression={$lastcomp.samaccountname}} | `
+                    export-csv $default_log -Append -notypeinformation
             }else{
                 $lastcomp = $comp
             }
@@ -450,7 +467,13 @@ $hash_uacchanged = @{name='UACChanged';expression={`
 $hash_usercertificatecount = @{Name="usercertificateCount";Expression={$_.usercertificate.count}}
 #this hashtable is used to create a calculated property that converts lastlogontimestamp
 $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
-    Expression={if($_.LastLogonTimeStamp){([datetime]::FromFileTime($_.LastLogonTimeStamp))}}}
+    Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
+$hash_whenchanged = @{Name="whenchanged";
+    Expression={($_.whenchanged).ToString('MM/dd/yyyy')}}
+$hash_whencreated = @{Name="whencreated";
+    Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
+$hash_pwdLastSet = @{Name="pwdLastSet";
+    Expression={if($_.PwdLastSet -ne 0){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
 #endregion
 
 if(!($importfunctionsonly)){

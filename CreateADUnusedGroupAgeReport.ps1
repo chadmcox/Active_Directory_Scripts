@@ -61,7 +61,7 @@ from the use or distribution of the Sample Code..
 #> 
 Param($reportpath = "$env:userprofile\Documents")
 
-$default_log = "$reportpath\report_unused_groups_age.csv"
+$default_log = "$reportpath\report_StaleADGroups.csv"
 If ($(Try { Test-Path $_default_log} Catch { $false })){Remove-Item $_default_log -force}
 $groups = @()
 
@@ -72,14 +72,19 @@ $hash_ageindays = @{name='AgeinDays';expression={(new-TimeSpan($($_.whencreated)
 $hash_rid = @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}}
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
+$hash_whencreated = @{Name="whencreated";
+    Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
 #endregion
 
 foreach($domain in (get-adforest).domains){
     $groups += get-adgroup -LDAPFilter "(&(!(member=*))(!(memberof=*)))" `
-            -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory,objectSid -server $domain | `
+            -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory, `
+                objectSid,description,managedby -server $domain | `
         where {(!($_."msDS-ReplValueMetaData"))} | `
-        select $hash_domain,name,samaccountname,groupcategory,groupscope,whencreated,`
-            $hash_ageindays,isCriticalSystemObject,$hash_rid,$hash_parentou,distinguishedname | where {$_.Rid -gt 1000} 
+        select $hash_domain,samaccountname,groupcategory,groupscope,$hash_whencreated,`
+            $hash_ageindays,isCriticalSystemObject,$hash_rid,$hash_parentou,description,managedby | `
+            where {$_.Rid -gt 1000 -and $_.parentou -notlike "*CN=Users,DC=*" -and $_.parentou `
+            -notlike "*OU=Microsoft Exchange Security Groups,DC=*"} 
 }
 
 $groups | export-csv $default_log -NoTypeInformation

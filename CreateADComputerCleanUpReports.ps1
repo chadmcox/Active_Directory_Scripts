@@ -390,7 +390,7 @@ Function global:ADComputerswithStalePWDAgeAndLastLogon{
                                 -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) 
                                 -and (iscriticalsystemobject -eq $false) -and (whencreated -lt $create_time)} `
                     -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset, `
-                        enabled,whencreated, `
+                        enabled,whencreated `
                     -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, name,OperatingSystem,admincount,enabled,$hash_pwdage,$hash_pwdlastset, `
                         $hash_lastLogonTimestamp,$hash_whencreated,$hash_whenchanged,$hash_parentou}

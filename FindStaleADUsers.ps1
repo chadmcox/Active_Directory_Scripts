@@ -96,12 +96,13 @@ Function ADUserswithStalePWDAgeAndLastLogon{
         if(!($script:ous)){
             ADOUList
         }
+        Write-host "Looking for Stale Users."
         foreach($ou in $script:ous){$domain = $((Get-ADDomainController -Discover -Domain ($ou).domain -Service "PrimaryDC").hostname)
             try{$results += get-aduser -Filter {(LastLogonTimeStamp -lt $threshold_time -or LastLogonTimeStamp -notlike "*")
                  -and (pwdlastset -lt $threshold_time -or pwdlastset -eq 0) -and (enabled -eq $true) 
                  -and (iscriticalsystemobject -notlike "*") -and (whencreated -lt $create_time)}`
                     -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated,whenchanged,LastLogonDate, `
-                        PasswordNeverExpires,CannotChangePassword,SmartcardLogonRequired, serviceprincipalname,lockedout, `
+                        PasswordNeverExpires,CannotChangePassword,SmartcardLogonRequired, serviceprincipalname,LastLogonTimeStamp, `
                         LastBadPasswordAttempt,SIDHistory `
                     -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled,lockedout,PasswordExpired,PasswordNeverExpires,`
@@ -115,7 +116,8 @@ Function ADUserswithStalePWDAgeAndLastLogon{
             write-host "User object with passwords or lastlogon timestamps greater than $DaysInactive days: $(($results | measure).count)"
             write-host "Stale User object with no password set ever: $(($results | where {$_.pwdLastSet -eq $null} | measure).count)"
             write-host "Stale User with expired password: $(($results | where {$_.PasswordExpired -eq $True} | measure).count)"
-            write-host "Stale User where spn is defined: $(($results | where {$_.SPNExist -eq $true} | measure).count)"
+            write-host "Stale User where spn is defined: $(($results | where {$_.containsSPN -eq $true} | measure).count)"
+            write-host "Stale User locked out: $(($results | where {$_.lockedout -eq $true} | measure).count)"
         }
     }
 }
@@ -128,7 +130,6 @@ $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
 $hash_pwdage = @{Name="PwdAgeinDays";Expression={`
     if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{0}}}
-
 $hash_lastbadpassword = @{Name="LastBadPasswordAttemp";
     Expression={($_.LastBadPasswordAttemp).ToString('MM/dd/yyyy')}}
 $hash_whenchanged = @{Name="whenchanged";

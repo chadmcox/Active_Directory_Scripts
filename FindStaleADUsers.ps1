@@ -139,11 +139,6 @@ $hash_pwdLastSet = @{Name="pwdLastSet";
     Expression={if($_.PwdLastSet -ne 0){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
 $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
     Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
-$hash_thumbnailphotosize = @{Name="thumbnailPhotoSize";Expression={[math]::round((($_.thumbnailPhoto.count)/1.33)/1kb,2)}}
-$hash_AuthNPolicy = @{Name="AuthNPolicy";Expression={if($_."msDS-AssignedAuthNPolicy"){$True}else{$False}}}
-$hash_AuthNPolicySilo = @{Name="AuthNPolicySilo";Expression={if($_."msDS-AssignedAuthNPolicySilo"){$True}else{$False}}}
-$hash_usercertificatecount = @{Name="usercertificateCount";Expression={$_.usercertificate.count}}
-$hash_usersmimecount = @{Name="userSMIMECertificateCount";Expression={$_.userSMIMECertificate.count}}
 $hash_spn = @{Name="containsSPN";Expression={if($_.serviceprincipalname){$true}else{$false}}}
 $hash_sidhist = @{name='SIDHistory';expression={if($_.SIDHistory -like "*"){$true}else{$false}}}
 #endregion

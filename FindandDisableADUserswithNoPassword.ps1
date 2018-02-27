@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID d9e27f07-95e9-4ad9-b7c6-fb27ce762515
 
@@ -82,13 +82,13 @@ Function ADUserswithPwdNotSet{
         $results = @()
         
         foreach($domain in (get-adforest).domains){
-            try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (iscriticalsystemobject -notlike "*") 
-                -and (whencreated -lt $ctime)} `
-                -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated, `
+            try{$results += Get-ADUser -Filter {(pwdlastset -eq 0) -and (lastLogonTimestamp -notlike "*") -and (enabled -eq $true) 
+                -and (iscriticalsystemobject -notlike "*") -and (whencreated -lt $ctime) } `
+                -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated,passwordnotrequired, `
                     whenchanged,"msDS-ReplAttributeMetaData",lastLogonTimestamp `
                 -server $domain | `
                     select $hash_domain, samaccountname,admincount,enabled, `
-                        PasswordExpired,$hash_pwdLastSet,@{name='MetapwdLastSet';expression={($_ | `
+                        PasswordExpired,$hash_pwdLastSet,@{name='ActualLastPWD';expression={($_ | `
                         Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA |`
                         where { $_.pszAttributeName -eq "ntPwdHistory"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `
                         $hash_lastLogonTimestamp,$hash_whencreated,$hash_parentou}

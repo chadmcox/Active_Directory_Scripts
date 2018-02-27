@@ -87,7 +87,7 @@ Function ADUserswithPwdNotSet{
                 -Properties admincount,enabled,PasswordExpired,pwdLastSet,whencreated,passwordnotrequired, `
                     whenchanged,"msDS-ReplAttributeMetaData",lastLogonTimestamp `
                 -server $domain | `
-                    select $hash_domain, samaccountname,admincount,enabled, `
+                    select $hash_domain, samaccountname,admincount,enabled,passwordnotrequired, `
                         PasswordExpired,$hash_pwdLastSet,@{name='ActualLastPWD';expression={($_ | `
                         Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA |`
                         where { $_.pszAttributeName -eq "ntPwdHistory"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `

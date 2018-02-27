@@ -90,7 +90,7 @@ Function ADUserswithPwdNotSet{
                     select $hash_domain, samaccountname,admincount,enabled, `
                         PasswordExpired,$hash_pwdLastSet,@{name='MetapwdLastSet';expression={($_ | `
                         Select-Object -ExpandProperty "msDS-ReplAttributeMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_ATTR_META_DATA |`
-                        where { $_.pszAttributeName -eq "pwdLastSet"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `
+                        where { $_.pszAttributeName -eq "ntPwdHistory"}}).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}}, `
                         $hash_lastLogonTimestamp,$hash_whencreated,$hash_parentou}
             catch{"function ADUserswithPwdNotSet - $domain - $($_.Exception)" | out-file $default_err_log -append}
         }

@@ -13,11 +13,11 @@
 .EXAMPLE
 .\Findanddisablestaleadcomputers.ps1 
 
-.\Findanddisablestaleadcomputers.ps1 -reportonly
+.\Findanddisablestaleadcomputers.ps1 -disablestale
 
 .\Findanddisablestaleadcomputers.ps1 -$DaysInactive 120
 
-.VERSION 0.2
+.VERSION 0.3
 
 .GUID 2b49ab62-9f8e-4542-b890-329b42c15d75
 
@@ -68,55 +68,72 @@ from the use or distribution of the Sample Code..
 #Requires -RunAsAdministrator
 
 
-Param($DaysInactive=90,$reportpath = "$env:userprofile\Documents",[switch]$reportonly)
+Param($DaysInactive=90,
+$reportpath = "$env:userprofile\Documents",
+[switch]$disablestale)
 
 $default_err_log = $reportpath + '\err_log.txt'
-$default_log = "$reportpath\report_ADWindowsComputerswithStalePWDAgeAndLastLogon.csv"
+$windows_log = "$reportpath\reportStaleWindowsADComputers.csv"
+$non_windows_log = "$reportpath\reportStaleNonWindowsADComputers.csv"
 
-Function ADComputerswithStalePWDAgeAndLastLogon{
-    #report_computers_stale
-    [cmdletbinding()]
-    param()
-    process{
-        write-host "Starting Function ADComputerswithStalePWDAgeAndLastLogon"
-        
-        $script:results = @()
-        $utc_stale_date = (Get-Date).Adddays(-($DaysInactive)).ToFileTimeUTC() 
-
+Function createADSearchBase{
+    write-host "Getting Searchbase list"
+    $searchbase_list = "$reportpath\tmpADSearchBaseList.csv"
+    try{Get-ChildItem $searchbase_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-5))} | Remove-Item -force}catch{}
+    If (!(Test-Path $searchbase_list)){
         foreach($domain in (get-adforest).domains){
-            try{$script:results += get-adcomputer -filter {(LastLogonTimeStamp -lt $utc_stale_date -or LastLogonTimeStamp -notlike "*")
-                        -and (pwdlastset -lt $utc_stale_date -or pwdlastset -eq 0) -and (enabled -eq $true)
-                        -and (iscriticalsystemobject -notlike $true) -and (OperatingSystem -like 'Windows*')
-                        -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
-                    -properties IPv4Address,OperatingSystem,serviceprincipalname,LastLogonTimeStamp,pwdlastset, `
-                        enabled,whencreated,PasswordLastSet `
-                    -server $domain | where {$_.IPv4Address -eq $null} | `
-                    select $hash_domain, name,samaccountname,OperatingSystem,enabled,$hash_pwdLastSet, `
-                        $hash_lastLogonTimestamp,$hash_whencreated,$hash_parentou}
-            catch{"function ADComputerswithStalePWDAgeAndLastLogon - $domain - $($_.Exception)" | `
-                out-file $default_err_log -append}
-        }
-        
-        $script:results | export-csv $default_log -NoTypeInformation
-        if($script:results){
-            write-host "Found $(($script:results | measure).count) Stale Windows Computer Objects."
-            write-host -foregroundcolor yellow "To view results run: import-csv $default_log | out-gridview"
-            if(!($reportonly)){
-                DisableADComputers
-            }
+            try{Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=domainDNS)(objectclass=builtinDomain))" `
+                -Properties "msds-approx-immed-subordinates" -server $domain | where {$_."msds-approx-immed-subordinates" -ne 0} | select `
+                $hash_domain, DistinguishedName  | export-csv $searchbase_list -append -NoTypeInformation}
+            catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            try{(get-addomain $domain).UsersContainer | Get-ADObject -server $domain | select `
+                $hash_domain, DistinguishedName | export-csv $searchbase_list -append -NoTypeInformation}
+            catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            try{(get-addomain $domain).ComputersContainer | Get-ADObject -server $domain | select `
+                $hash_domain, DistinguishedName | export-csv $searchbase_list -append -NoTypeInformation}
+            catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}
+            
         }
     }
+    $searchbase = import-csv $searchbase_list
+    $searchbase
+}
+Function collectADStaleComputers{
+    $d = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
+    $results = @()
+    $Default_Group_ID = 515
+    $ComputerProperties = @("whencreated","lastlogontimestamp","SamAccountName","operatingsystem",`
+        "operatingsystemversion","UserAccountControl","admincount","pwdlastset","IPv4Address","DNSHostName", `
+        "PasswordNotRequired")
+
+    if(!($searchbase)){
+            #go to function to populate the variable
+            $searchbase = createADSearchBase
+    }
+    write-host "Collecting Stale Computers"
+    foreach($sb in $searchbase){$domain = $sb.domain
+        try{$results += get-adcomputer -Filter {(LastLogonTimeStamp -lt $d -or LastLogonTimeStamp -notlike "*")
+                    -and (pwdlastset -lt $d -or pwdlastset -eq 0) -and (enabled -eq $true)
+                    -and (iscriticalsystemobject -notlike $true)
+                    -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
+                -Properties $ComputerProperties -SearchBase $sb.distinguishedname -SearchScope OneLevel `
+                -Server $sb.domain | where {$_.IPv4Address -eq $null} | select $hash_domain, *}
+        catch{"functionCollectADComputers - $domain - $($_.Exception)" | out-file $default_err_log -append}
+    }
+
+    $results | select domain,SamAccountName,DNSHostName,operatingsystem,UserAccountControl,`
+            $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_whencreated,PasswordNotRequired,$hash_parentou
 }
 Function DisableADComputers{
     [cmdletbinding()]
     param()
     process{
-        write-host "Disabling Stale Windows Computer Objects"
-        $script:results | foreach{
+        <#write-host "Disabling Stale Windows Computer Objects"
+         | foreach{
             try{Disable-ADAccount ($_).samaccountname -server ($_).domain -whatif}
             catch{"Failed"; "$(Get-Date) - $_.domain - Failed to disable $(($_).samaccountname) - $($_.Exception)" | `
                 out-file $default_err_log -append}
-        }
+        }#>
     }
 }
 $hash_whencreated = @{Name="whencreated";
@@ -130,4 +147,10 @@ $hash_domain = @{Name="Domain";
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
 
-ADComputerswithStalePWDAgeAndLastLogon
+$stale = @()
+$stale = collectADStaleComputers
+
+$stale | where {$_.operatingsystem -like "Windows*"} | export-csv $windows_log -NoTypeInformation
+$stale | where {$_.operatingsystem -notlike "Windows*"} | export-csv $non_windows_log -NoTypeInformation
+
+write-host "Results can be found here: $reportpath"

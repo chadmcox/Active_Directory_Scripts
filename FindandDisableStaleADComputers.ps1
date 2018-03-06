@@ -6,7 +6,9 @@
 
 .DESCRIPTION 
  This script finds all stale windows computers in active directory and disables them. 
- use the reportonly switch just to get a list of computers that will get disabled.
+ use the disablestale switch to disable the windows computers.  Please look at the results
+ first and then when you are ready to disable the objects comment out the -whatif in the DisableADComputers
+ function
 
  !!!remove the -whatif after you test it.
 
@@ -17,7 +19,7 @@
 
 .\Findanddisablestaleadcomputers.ps1 -$DaysInactive 120
 
-.VERSION 0.3
+.VERSION 0.4
 
 .GUID 2b49ab62-9f8e-4542-b890-329b42c15d75
 
@@ -75,7 +77,9 @@ $reportpath = "$env:userprofile\Documents",
 $default_err_log = $reportpath + '\err_log.txt'
 $windows_log = "$reportpath\reportStaleWindowsADComputers.csv"
 $non_windows_log = "$reportpath\reportStaleNonWindowsADComputers.csv"
+$stale = @()
 
+#region functions
 Function createADSearchBase{
     write-host "Getting Searchbase list"
     $searchbase_list = "$reportpath\tmpADSearchBaseList.csv"
@@ -126,16 +130,16 @@ Function collectADStaleComputers{
 }
 Function DisableADComputers{
     [cmdletbinding()]
-    param()
+    param($computer,$domain)
     process{
-        <#write-host "Disabling Stale Windows Computer Objects"
-         | foreach{
-            try{Disable-ADAccount ($_).samaccountname -server ($_).domain -whatif}
-            catch{"Failed"; "$(Get-Date) - $_.domain - Failed to disable $(($_).samaccountname) - $($_.Exception)" | `
+        write-host "Disabling $computer"
+            try{Disable-ADAccount $computer -server $domain -whatif}
+            catch{"Failed"; "$(Get-Date) - ($computer).domain - Failed to disable $(($computer).samaccountname) - $($_.Exception)" | `
                 out-file $default_err_log -append}
-        }#>
     }
 }
+#endregion
+#region hashes
 $hash_whencreated = @{Name="whencreated";
     Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
 $hash_pwdLastSet = @{Name="pwdLastSet";
@@ -146,11 +150,17 @@ $hash_domain = @{Name="Domain";
     Expression={$domain}}
 $hash_parentou = @{name='ParentOU';expression={`
     $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}}
+#endregion
 
-$stale = @()
 $stale = collectADStaleComputers
+
+if($disablestale){
+    $stale | where {$_.operatingsystem -like "Windows*"} | foreach{DisableADComputers -computer $_.samaccountname -domain $_.domain}
+}
 
 $stale | where {$_.operatingsystem -like "Windows*"} | export-csv $windows_log -NoTypeInformation
 $stale | where {$_.operatingsystem -notlike "Windows*"} | export-csv $non_windows_log -NoTypeInformation
 
+
+cd $reportpath
 write-host "Results can be found here: $reportpath"

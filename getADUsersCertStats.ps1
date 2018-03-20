@@ -56,7 +56,7 @@ from the use or distribution of the Sample Code..
 
  to run against one user do the following
 
- .\collectADUsersCertState.ps1 -samaccountname [samaccountname] -domain [domainname]
+ .\getADUsersCertState.ps1 -samaccountname [samaccountname] -domain [domainname]
 #> 
 Param($samaccountname,$domain,$reportpath = "$env:userprofile\Documents")
 

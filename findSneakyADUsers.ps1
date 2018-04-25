@@ -1,3 +1,5 @@
+#Requires -Module activedirectory
+#Requires -version 4.0
 
 <#PSScriptInfo
 
@@ -63,10 +65,16 @@ from the use or distribution of the Sample Code..
 
  This script could be used to assist in finding possible kerberoasting accounts.
  It could also be used to assist in finding possible stale accounts
+
+ this does require the ActiveDirectory module and at least version 4.0 powershell installed
+ 
+ This will install activedirectory module
+  Add-WindowsFeature RSAT-AD-PowerShell
+
+
 #>
 
-#Requires -Module activedirectory
-#Requires -version 4.0
+
 
 Param([switch]$offlineSPNReport,
 [switch]$OnlySensitiveAccounts,

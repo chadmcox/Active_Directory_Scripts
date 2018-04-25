@@ -85,7 +85,7 @@ $serviceAccounts = @()
 $results = @()
 
 Function collectADUserswithSPN{
-
+    $results = @()
     Write-host "Gathering List of AD Users"    
     $userProperties = @("whencreated","lastlogontimestamp","SamAccountName",`
         "UserAccountControl","Enabled","admincount","Trustedfordelegation",`

@@ -1,7 +1,10 @@
+#Requires -Module ActiveDirectory
+#Requires -RunAsAdministrator
+#Requires -Version 4
 
 <#PSScriptInfo
 
-.VERSION 0.7
+.VERSION 0.8
 
 .GUID d96dbab2-8c25-4761-b7fc-ddaab5928472
 
@@ -44,14 +47,6 @@ from the use or distribution of the Sample Code..
 
 .PRIVATEDATA 
 
-#>
-
-#Requires -Module ActiveDirectory
-#Requires -RunAsAdministrator
-#Requires -Version 4
-
-<# 
-
 .DESCRIPTION 
  This script modifies and object in the configuration container and watches update on all domain controllers. 
  Then creaes a final report. 
@@ -84,12 +79,17 @@ $value = 1..1000 | get-random
 $start_time = get-date
 
 #set value on current domains pdc
-get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
-    -server (Get-ADDomain).PDCEmulator | set-adobject -Replace @{wWWHomePage=$value}
+Try{get-adobject $object_dn -Partition $ad_partition -properties wWWHomePage `
+    -server (Get-ADDomain).PDCEmulator | set-adobject -Replace @{wWWHomePage=$value}}
+Catch{write-host "Unable to write to object $object_dn"
+exit}
 
 #used for progress bar
 $count = ($domain_controllers_list).count; $i = 0
 cls
+Write-host ""
+Write-host ""
+write-host ""
 
 Measure-Command {
     While (($domain_controllers_list | measure).count -ne 0){

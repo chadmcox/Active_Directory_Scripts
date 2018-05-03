@@ -4,7 +4,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.3
 
 .GUID 6daab471-c714-4c2c-a887-bf3eb56567eb
 
@@ -57,6 +57,8 @@ from the use or distribution of the Sample Code..
 #> 
 Param($reportpath = "$env:userprofile\Documents\ADReports")
 $searchbase = @()
+$default_err_log = "$reportpath\err.txt"
+$time_log = "$reportpath\runtime.csv"
 
 Function createADSearchBase{
     $searchbase_list = "$reportpath\tmpADSearchBaseList.csv"

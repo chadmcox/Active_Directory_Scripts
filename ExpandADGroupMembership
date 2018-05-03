@@ -4,7 +4,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.4
 
 .GUID 6daab471-c714-4c2c-a887-bf3eb56567eb
 
@@ -55,12 +55,15 @@ from the use or distribution of the Sample Code..
  This script is will gather useful information around ad objects including cleanup task. 
 
 #> 
-Param($reportpath = "$env:userprofile\Documents\ADReports")
+Param($reportpath = "$env:userprofile\Documents")
+
+cd $reportpath
 $searchbase = @()
 $default_err_log = "$reportpath\err.txt"
 $time_log = "$reportpath\runtime.csv"
 
 Function createADSearchBase{
+    $hash_domain = @{name='Domain';expression={$domain}}
     $searchbase_list = "$reportpath\tmpADSearchBaseList.csv"
     try{Get-ChildItem $searchbase_list | Where-Object { $_.LastWriteTime -lt $((Get-Date).AddDays(-5))} | Remove-Item -force}catch{}
     write-host "Generating Search Base List"
@@ -68,17 +71,17 @@ Function createADSearchBase{
         foreach($domain in (get-adforest).domains){
             write-debug "Gathering OUs"
             try{Get-ADObject -ldapFilter "(objectclass=organizationalunit)" `
-                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null |`
+                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null | `
                      where {$_."msds-approx-immed-subordinates" -ne 0} | select `
                 $hash_domain, DistinguishedName  | export-csv $searchbase_list -append -NoTypeInformation}
             catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}
             try{Get-ADObject -ldapFilter "(objectclass=domainDNS)" `
-                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null |`
+                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null | `
                      where {$_."msds-approx-immed-subordinates" -ne 0} | select `
                 $hash_domain, DistinguishedName  | export-csv $searchbase_list -append -NoTypeInformation}
             catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}
             try{Get-ADObject -ldapFilter "(objectclass=builtinDomain)" `
-                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null |`
+                -Properties "msds-approx-immed-subordinates" -server $domain -ResultPageSize 500 -ResultSetSize $null | `
                      where {$_."msds-approx-immed-subordinates" -ne 0} | select `
                 $hash_domain, DistinguishedName  | export-csv $searchbase_list -append -NoTypeInformation}
             catch{"function CollectionADSearchBase - $domain - $($_.Exception)" | out-file $default_err_log -append}

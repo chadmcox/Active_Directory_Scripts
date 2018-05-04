@@ -4,7 +4,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.4
+.VERSION 0.6
 
 .GUID 6daab471-c714-4c2c-a887-bf3eb56567eb
 
@@ -43,7 +43,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-
+0.8 Added Progress bar
 
 #>
 
@@ -55,7 +55,7 @@ from the use or distribution of the Sample Code..
  This script is will gather useful information around ad objects including cleanup task. 
 
 #> 
-Param($reportpath = "$env:userprofile\Documents")
+Param($reportpath = "$env:userprofile\Documents",[switch]$getonlycircularnested)
 
 cd $reportpath
 $searchbase = @()
@@ -131,6 +131,7 @@ Function CollectADNestedGroups{
             }
         }
     }
+
 }
 function expandADGroupMembership{
     param($groupDN,$originalDN,[switch]$expand)
@@ -156,7 +157,8 @@ function expandADGroupMembership{
                     #write-debug $True
                     #group already searched
                     if($_.memberof -eq $originalDN){
-                        $script:nestedgroups += $_
+                        
+                        $script:circularnestedgroups += $_
                         $script:identifiedgroup += $_.group
                     }
                 }
@@ -171,20 +173,54 @@ function expandADGroupMembership{
     }
 }
 function startADGroupExpansion{
-    $script:nestedgroups = @()
+    $i = 0
+    $script:circularnestedgroups = @()
+    $script:othersearchedgroup = @()
     $script:expandedgroups = @()
     $script:groupswithmemberships = @()
-    $script:groupswithmemberships = CollectADNestedGroups
-    Write-host "Found $(($script:groupswithmemberships.group | select -Unique).count) Groups to Expand"
-    $script:groupswithmemberships.group | select -Unique | foreach{
-        $script:searchedgroups = @()
-        $script:identifiedgroup = @()
-        expandADGroupMembership -groupDN $_ -originalDN $_ -expand
+    $script:searchedgroups = @()
+    $script:identifiedgroup = @()
+    $script:groupswithmemberships = CollectADNestedGroups | sort
+    $groupcount = $(($script:groupswithmemberships.group | select -Unique).count)
+    Write-host "Found $groupcount Groups to Expand"
+    ($script:groupswithmemberships).group  | select -Unique | foreach{
+        Write-Progress -Activity "Building Group Membership" -Status "Group: $($_)" -PercentComplete ($I/$groupcount*100);$i++
+            #this basicall determines if I want to only get circular nesting
+            if(!($getonlycircularnested)){$script:searchedgroups = @()}
+            expandADGroupMembership -groupDN $_ -originalDN $_ -expand
     }
+    Write-Progress -Activity "Complete" -Status "End" -Completed 
     $script:expandedgroups
 }
+Function creategroupmemofsummary{
+    $groupDirectCount | foreach{
+        $currentgdc = $_
+        $groupExpandedCount | foreach{
+            $currentgec = $_
+            if($currentgdc.name -eq $_.name){
+                $currentgdc | select name, `
+                   @{name='DirectCount';expression={$_.count}}, `
+                   @{name='ExpandedCount';expression={$currentgec.count}},`
+                    @{name='ProblemPercentage';expression={100 - [math]::Round((($currentgec.count - $_.count) / $currentgec.count) * 100)}}
+            }
+        }
+    }
+}
 cls
+$results = @()
 startADGroupExpansion | export-csv "$reportpath\reportADGroupMembersExpanded.csv" -NoTypeInformation
-$script:expandedgroups | Group-Object group | select name, count | sort count -Descending | out-gridview
+$script:circularnestedgroups | export-csv "$reportpath\reportADGroupCircularNested.csv" -NoTypeInformation
+$script:groupswithmemberships | export-csv "$reportpath\reportADGroupDirectMemberOf.csv" -NoTypeInformation
+write-host "Creating Nesting Summary"
+$groupDirectCount = $script:groupswithmemberships | Group-Object group | select name, count | sort name 
+$groupExpandedCount = $script:expandedgroups | Group-Object group | select name, count | sort name
+
+$results = creategroupmemofsummary
+$results  | export-csv "$reportpath\reportADGroupMemStats.csv" -NoTypeInformation
+write-host "Groups with Likely Issues"
+$results | sort ExpandedCount -Descending | where {$_.ExpandedCount -gt 600 -and $_.ProblemPercentage -gt 89} | select -first 25 
 
 write-host "Results can be found here: $reportpath\reportADGroupMembersExpanded.csv" 
+
+#$script:expandedgroups | Group-Object group | select name, count | sort count -Descending | select -first 50
+

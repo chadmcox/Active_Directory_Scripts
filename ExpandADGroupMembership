@@ -1,10 +1,9 @@
 #Requires -Module ActiveDirectory
-#Requires -RunAsAdministrator
 #Requires -Version 4
 
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID 6daab471-c714-4c2c-a887-bf3eb56567eb
 
@@ -147,6 +146,7 @@ function expandADGroupMembership{
 
     #write-debug $groupDN
     $script:searchedgroups += $groupDN
+    $script:grpsearchedDonotlookfornesting += $groupDN
     #filter where group is same as groupdn loop through all group member of
     $script:groupswithmemberships | Foreach {
         if($_.group -eq $groupDN){
@@ -157,8 +157,8 @@ function expandADGroupMembership{
                     #write-debug $True
                     #group already searched
                     if($_.memberof -eq $originalDN){
-                        
-                        $script:circularnestedgroups += $_
+                        if(!($script:grpsearchedDonotlookfornesting -contains $_.memberof)){
+                        $script:circularnestedgroups += $_}
                         $script:identifiedgroup += $_.group
                     }
                 }
@@ -179,6 +179,7 @@ function startADGroupExpansion{
     $script:expandedgroups = @()
     $script:groupswithmemberships = @()
     $script:searchedgroups = @()
+    $script:grpsearchedDonotlookfornesting = @()
     $script:identifiedgroup = @()
     $script:groupswithmemberships = CollectADNestedGroups | sort
     $groupcount = $(($script:groupswithmemberships.group | select -Unique).count)
@@ -193,15 +194,21 @@ function startADGroupExpansion{
     $script:expandedgroups
 }
 Function creategroupmemofsummary{
-    $groupDirectCount | foreach{
-        $currentgdc = $_
-        $groupExpandedCount | foreach{
-            $currentgec = $_
+    $groupDirectCount | foreach{$currentgdc = $_
+        $groupExpandedCount | foreach{$currentgec = $_
             if($currentgdc.name -eq $_.name){
-                $currentgdc | select name, `
-                   @{name='DirectCount';expression={$_.count}}, `
-                   @{name='ExpandedCount';expression={$currentgec.count}},`
-                    @{name='ProblemPercentage';expression={100 - [math]::Round((($currentgec.count - $_.count) / $currentgec.count) * 100)}}
+                    $prob = $(100 - [math]::Round((($currentgec.count - $_.count) / $currentgec.count) * 100))
+                    $currentgdc | select name, `
+                        @{name='DirectCount';expression={$_.count}}, `
+                        @{name='ExpandedCount';expression={$currentgec.count}},`
+                        @{name='LikelyProblem';expression={
+                            if($currentgec.count -gt "250" -and  $prob -gt "75"){
+                                "High"
+                            }elseif($currentgec.count -gt "100" -and  $prob -gt "90"){
+                                "Medium"
+                            }else{
+                                "Low"
+                            }}}
             }
         }
     }
@@ -212,15 +219,16 @@ startADGroupExpansion | export-csv "$reportpath\reportADGroupMembersExpanded.csv
 $script:circularnestedgroups | export-csv "$reportpath\reportADGroupCircularNested.csv" -NoTypeInformation
 $script:groupswithmemberships | export-csv "$reportpath\reportADGroupDirectMemberOf.csv" -NoTypeInformation
 write-host "Creating Nesting Summary"
-$groupDirectCount = $script:groupswithmemberships | Group-Object group | select name, count | sort name 
+$groupDirectCount = $script:groupswithmemberships | Group-Object group | select name, count | sort name
 $groupExpandedCount = $script:expandedgroups | Group-Object group | select name, count | sort name
 
 $results = creategroupmemofsummary
 $results  | export-csv "$reportpath\reportADGroupMemStats.csv" -NoTypeInformation
-write-host "Groups with Likely Issues"
-$results | sort ExpandedCount -Descending | where {$_.ExpandedCount -gt 600 -and $_.ProblemPercentage -gt 89} | select -first 25 
+write-host "-----------------------------------" -ForegroundColor Yellow
+write-host "Groups Likely To Cause a Token Issue Due to Over Nesting" -ForegroundColor Yellow
+$results | sort ExpandedCount -Descending | where {$_.LikelyProblem -eq "High"} | select -first 25 | Out-Host
+write-host "-----------------------------------" -ForegroundColor Yellow
 
 write-host "Results can be found here: $reportpath\reportADGroupMembersExpanded.csv" 
 
 #$script:expandedgroups | Group-Object group | select name, count | sort count -Descending | select -first 50
-

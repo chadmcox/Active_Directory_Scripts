@@ -52,18 +52,23 @@ param($samaccountname = $(read-host -Prompt "Enter samaccountname"))
 
 function getADUserDirectReports{
     param($dn,$place,$previous)
-    $place = $place + 1
+    
     $sam = get-aduser $dn -server "$((get-addomain).DNSRoot):3268" -Properties displayname
     $sam | select `
         @{name='Level';expression={$place}}, `
-        @{name='ReportsSAM';expression={$_.samaccountname}}, `
-        @{name='ReportsDisplayname';expression={$_.displayname}}, `
-        @{name='ReportsTo';expression={$previous.displayname}} | out-host
-
+        @{name='ReportsTo';expression={$previous.displayname}}, `
+        @{name='Displayname';expression={$_.displayname}}, `
+        @{name='Samaccountname';expression={$_.samaccountname}}
+        
+        
+    $place = $place + 1
     #write-host "$place $($sam.samaccountname) - $($sam.displayname)"
     #does this DN have results
-    $results = foreach($domain in (get-adforest).domains){try{get-aduser $dn -Properties directreports `
-         -server $domain -ErrorAction SilentlyContinue | select -ExpandProperty directreports}catch{}}
+    foreach($domain in (get-adforest).domains){
+        $results = try{get-aduser $dn -Properties directreports `
+         -server $domain -ErrorAction SilentlyContinue | select -ExpandProperty directreports}catch{}
+         if($results){break}
+    }
     if($results){
           $results | foreach{
                 $directsupn = $_
@@ -75,14 +80,15 @@ function getADUserDirectReports{
 }
 
 cls
-
+$results = @()
 #$samaccountname = read-host -Prompt "Enter samaccountname"
-foreach($domain in (get-adforest).domains){
-    try{get-aduser $samaccountname -Properties directreports -server $domain `
-        -ErrorAction SilentlyContinue | select -ExpandProperty directreports | `
-            foreach{
-        $upn = $_
-        getADUserDirectReports -dn $upn 
 
-    }}catch{}
-}
+Write-host "Total Time to Run"
+measure-command {$results = foreach($domain in (get-adforest).domains){
+    try{get-aduser $samaccountname -Properties directreports -server $domain `
+        -ErrorAction SilentlyContinue -PipelineVariable user | foreach{
+        getADUserDirectReports -dn $user.distinguishedname -place 0
+    }}catch{}}} | select minutes,seconds | Out-Host
+
+$results
+

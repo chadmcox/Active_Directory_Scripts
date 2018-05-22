@@ -51,8 +51,9 @@ from the use or distribution of the Sample Code..
 param($samaccountname = $(read-host -Prompt "Enter samaccountname"))
 
 function getADUserDirectReports{
+    [cmdletbinding()]
     param($dn,$place,$previous)
-    
+    write-information "expanding $dn"
     $sam = get-aduser $dn -server "$((get-addomain).DNSRoot):3268" -Properties displayname
     $sam | select `
         @{name='Level';expression={$place}}, `
@@ -72,7 +73,6 @@ function getADUserDirectReports{
     if($results){
           $results | foreach{
                 $directsupn = $_
-                
                 getADUserDirectReports -dn $directsupn -place $place -previous $sam
 
         }
@@ -83,12 +83,11 @@ cls
 $results = @()
 #$samaccountname = read-host -Prompt "Enter samaccountname"
 
-Write-host "Total Time to Run"
+
 measure-command {$results = foreach($domain in (get-adforest).domains){
     try{get-aduser $samaccountname -Properties directreports -server $domain `
         -ErrorAction SilentlyContinue -PipelineVariable user | foreach{
-        getADUserDirectReports -dn $user.distinguishedname -place 0
-    }}catch{}}} | select minutes,seconds | Out-Host
+        getADUserDirectReports -dn $user.distinguishedname -place 0 -InformationAction Continue
+    }}catch{}};cls} | select minutes,seconds | Out-Host
 
 $results
-

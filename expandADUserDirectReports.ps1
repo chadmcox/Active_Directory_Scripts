@@ -2,7 +2,7 @@
 #Requires -Module activedirectory
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.3
 
 .GUID 99537558-e989-463e-ba22-b955289e364c
 

@@ -1,10 +1,9 @@
-
 #Requires -Module activedirectory
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.5
 
-.GUID 99537558-e989-463e-ba22-b955289e364c
+.GUID 8ef10281-c133-4516-b937-f4e425ad254e
 
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
@@ -42,52 +41,114 @@ from the use or distribution of the Sample Code..
 
 .RELEASENOTES
 
-
-
 .DESCRIPTION 
  this will populate all of the directs for an individual. 
 
 #> 
-param($samaccountname = $(read-host -Prompt "Enter samaccountname"))
+Param($reportpath = "$env:userprofile\Documents")
 
-function getADUserDirectReports{
-    [cmdletbinding()]
-    param($dn,$place,$previous)
-    write-information "expanding $dn"
-    $sam = get-aduser $dn -server "$((get-addomain).DNSRoot):3268" -Properties displayname
-    $sam | select `
-        @{name='Level';expression={$place}}, `
-        @{name='ReportsTo';expression={$previous.displayname}}, `
-        @{name='Displayname';expression={$_.displayname}}, `
-        @{name='Samaccountname';expression={$_.samaccountname}}
-        
-        
-    $place = $place + 1
-    #write-host "$place $($sam.samaccountname) - $($sam.displayname)"
-    #does this DN have results
+function buildADUserDirectshashtable{
+    $users = @{}
+    $enabledusers = @()
+    
     foreach($domain in (get-adforest).domains){
-        $results = try{get-aduser $dn -Properties directreports `
-         -server $domain -ErrorAction SilentlyContinue | select -ExpandProperty directreports}catch{}
-         if($results){break}
+        $userProperties = @("SamAccountName","DirectReports","displayname","mail","distinguishedname")
+        $select_properties = $userProperties + $hash_domain
+        write-information "getting adusers $domain"
+        $enabledusers += get-aduser -ldapFilter "(&(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(IsCriticalSystemObject=TRUE)))" `
+            -server $domain -Properties $userProperties | select $select_properties
     }
-    if($results){
-          $results | foreach{
-                $directsupn = $_
-                getADUserDirectReports -dn $directsupn -place $place -previous $sam
-
+    $count = $enabledusers.count
+    $enabledusers | foreach{
+        $i++
+        write-host "hashing $($_.displayname) remaing $($count - $i) / $count"
+        $users += @{$_.distinguishedname = @{
+            Domain = $_.domain
+            DirectReports = @($_.directreports | foreach{@{direct=$_}})
+            samaccountname = $_.samaccountname
+            displayname = $_.displayname
+            mail = $_.mail
+        }}
+    }
+    
+    $users
+}
+function expandadusersdirects{
+    param($DNtoexpand,$displayname,$place,$original)
+ $searched += $DNtoexpand
+ write-information "Expanding $DNtoexpand"
+ $results[$DNtoexpand] | select `
+        @{name='OrgFor';expression={$original}}, `
+        @{name='Level';expression={$place}}, `
+        @{name='ReportsDirectlyTo';expression={$displayname}}, `
+        @{name='Displayname';expression={$_.displayname}}, `
+        @{name='Samaccountname';expression={$_.samaccountname}}, `
+        @{name='Mail';expression={$_.mail}}, `
+        @{name='domain';expression={$_.domain}}
+    
+    if(($results[$DNtoexpand]).directreports.values){
+        ($results[$DNtoexpand]).directreports.values | foreach{
+            if(!($searched -contains $_)){
+                $i++
+                expandadusersdirects -dntoexpand $_ -displayname ($results[$DNtoexpand]).displayname -original $original -place $i
+            }
         }
     }
 }
+cls
+Write-host -ForegroundColor yellow "Select the AD Report to run:"
+Write-host "   0 - Get All Directs for Single User"
+Write-host "   1 - Get All Direct Reports for Forest"
+$xMenuChoiceA = read-host "Please enter an option 0 to 1..."
 
 cls
-$results = @()
-#$samaccountname = read-host -Prompt "Enter samaccountname"
+$hash_domain = @{name='Domain';expression={$domain}}
+if(!($hash_direct_results)){$hash_direct_results = @{}}
+$directs = @()
+
+if($xMenuChoiceA -eq 0){
+    $found = @()
+    $samaccountname = read-host -Prompt "Enter samaccountname"
+    $found = foreach($domain in (get-adforest).domains){
+        try{get-aduser $samaccountname -Properties directreports,displayname -server $domain `
+            -ErrorAction SilentlyContinue}catch{}}
+    if($found){
+        if($hash_direct_results.count -lt 1){
+            write-host "Building HashTable"
+            measure-command{$hash_direct_results = buildADUserDirectshashtable} | select minutes,secounds}
+        write-host "Building Direct Report"
+        measure-command{foreach($direct in $found.directreports){
+            $directs += expandadusersdirects -dntoexpand $direct -displayname $found.displayname -original $found.displayname -place 1
+        }} | select minutes,secounds
+            $directs | export-csv "$reportpath\$samaccountname Directreports.csv" -NoTypeInformation
+    }
+}elseif($xMenuChoiceA -eq 1){
+    if($hash_direct_results.count -lt 1){
+        write-host "Building HashTable"
+        measure-command{$hash_direct_results = buildADUserDirectshashtable} | select minutes,secounds}
+        write-host "Building Direct Report"
+    measure-command{
+        foreach($key in $results.keys){
+            if(($results[$key]).directreports.values){
+                $searched = @()
+                foreach($direct in $results[$key].directreports.values){
+                $directs += expandadusersdirects -dntoexpand $direct -displayname $results[$key].displayname -original $results[$key].displayname -place 1
+                }
+            }
+        }
+    } | select minutes,secounds
+    $directs | export-csv "$reportpath\AllADUsersDirectReportsExpanded.csv" -NoTypeInformation
+    $directs | group OrgFor | select name,count | sort count -Descending | select -First 10
+}
 
 
-measure-command {$results = foreach($domain in (get-adforest).domains){
-    try{get-aduser $samaccountname -Properties directreports -server $domain `
-        -ErrorAction SilentlyContinue -PipelineVariable user | foreach{
-        getADUserDirectReports -dn $user.distinguishedname -place 0 -InformationAction Continue
-    }}catch{}};cls} | select minutes,seconds | Out-Host
+write-host "All Reports found here: $reportpath"
 
-$results
+
+
+
+
+
+
+
+

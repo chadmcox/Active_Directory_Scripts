@@ -47,6 +47,9 @@ from the use or distribution of the Sample Code..
 #> 
 Param($reportpath = "$env:userprofile\Documents")
 
+#doing this to keep the initial run of the data into memory, so script can be ran multiple times.
+Set-Variable hash_direct_results -Scope global
+
 function buildADUserDirectshashtable{
     $users = @{}
     $enabledusers = @()
@@ -121,6 +124,7 @@ if($xMenuChoiceA -eq 0){
             $directs += expandadusersdirects -dntoexpand $direct -displayname $found.displayname -original $found.displayname -place 1
         }} | select minutes,secounds
             $directs | export-csv "$reportpath\$samaccountname Directreports.csv" -NoTypeInformation
+            $directs | out-host
     }
 }elseif($xMenuChoiceA -eq 1){
     if($hash_direct_results.count -lt 1){
@@ -138,17 +142,8 @@ if($xMenuChoiceA -eq 0){
         }
     } | select minutes,secounds
     $directs | export-csv "$reportpath\AllADUsersDirectReportsExpanded.csv" -NoTypeInformation
-    $directs | group OrgFor | select name,count | sort count -Descending | select -First 10
+    $directs | group OrgFor | select name,count | sort count -Descending | select -First 10 | out-host
 }
 
 
 write-host "All Reports found here: $reportpath"
-
-
-
-
-
-
-
-
-

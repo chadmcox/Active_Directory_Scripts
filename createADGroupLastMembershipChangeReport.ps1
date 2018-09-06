@@ -53,15 +53,6 @@ function CollectADGroupwithMemLastChange{
             -notlike "*OU=Microsoft Exchange Security Groups,DC=*"} 
 }
 
-function adgroupmembercontainsgroup{
-    param($samaccountname,$domain)
-    if((get-adgroupmember -Identity $samaccountname -Server $domain | where ObjectClass -eq "group" | Measure-Object).count -gt 0){
-        $true
-    }else{
-        $false
-    }
-}
-
 #region hashes
 $hash_memlastchange = @{name='MembershipLastChanged';
         expression={if($_."msDS-ReplValueMetaData"){($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | 

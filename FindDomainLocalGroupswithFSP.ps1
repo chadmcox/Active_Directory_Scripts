@@ -2,7 +2,7 @@
 #requires -version 3.0
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 0.2
 
 .GUID 368e7248-347a-46d9-ba35-3ae42890daed
 
@@ -46,6 +46,7 @@ function CollectDLGroupOrphanFSP{
     $trusted_domain_SIDs = @()
     $groups = @()
     foreach($domain in (get-adforest).domains){
+        write-host "Querying $domain for Domain Local Groups"
         $trusted_domain_SIDs += (get-adtrust -filter {intraforest -eq $false} `
             -Properties securityIdentifier -server $domain).securityIdentifier.value
         $groups += get-adgroup -LDAPFilter "(&(groupType:1.2.840.113556.1.4.803:=4)(member=*))" `
@@ -53,6 +54,7 @@ function CollectDLGroupOrphanFSP{
             $hash_domain, samaccountname, distinguishedname,GroupCategory,GroupScope, member
     
     }
+    Write-host "Building Report"
     foreach($group in $groups){
         foreach($member in ($group).member){
             $resolve = try{get-adobject $member -server $group.domain}catch{$null}

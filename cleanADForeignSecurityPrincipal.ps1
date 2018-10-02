@@ -2,7 +2,7 @@
 #Requires -version 4.0
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.4
 
 .GUID bff8254c-d342-4d67-876e-378d5ca57447
 
@@ -278,5 +278,6 @@ function findlist{
     }
 }
 
+$hash_domain = @{name='Domain';expression={$domain}}
 $allFSP = @()
 launchMenu

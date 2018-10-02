@@ -2,7 +2,7 @@
 #Requires -version 4.0
 <#PSScriptInfo
 
-.VERSION 0.4
+.VERSION 0.5
 
 .GUID bff8254c-d342-4d67-876e-378d5ca57447
 
@@ -33,6 +33,7 @@ Source: https://github.com/chadmcox/ADPoSh/blob/master/cleanADForeignSecurityPri
 -whatif must be removed throughout if wanting to actually perform change, by doing so you acknowledge testing was done.
 !!!!!
 
+0.5 was leaving the connection open to the domain when i translated the fsp.  have all fsps writing to array now and work with array.
 0.3 added menus
     fsp removal only happens if translated object is in the same domain
     Orphan fsp removal only happens if trust does not exist.
@@ -60,7 +61,9 @@ function CollectFSPGroupMembership{
         #get trust of existing domain
         #$trusted_domain_SIDs = (get-adtrust -filter {intraforest -eq $false} -Properties securityIdentifier -server $domain).securityIdentifier.value
         write-host "Searching $domain"
-        Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof -server $domain -PipelineVariable fsp | select -ExpandProperty memberof | foreach{
+        $fsps = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof -server $domain 
+        $fsps | foreach{$fsp = $_
+            $fsp | select -ExpandProperty memberof | foreach{
             $group = $_
             if($fsp.Name -match "^S-\d-\d+-\d+-\d+-\d+-\d+"){$domain_sid = $matches[0]}else{$domain_sid = $null}
             $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
@@ -69,7 +72,7 @@ function CollectFSPGroupMembership{
                 @{name='TrustExist';expression={($trusted_domain_SIDs | where {$_.securityidentifier -eq $domain_sid}).target}}, `
                 @{name='Memberof';expression={$group}},DistinguishedName | `
                 where {$_.name -notmatch "^S-\d-\d+-(\d+)$"}
-        }
+        }}
     }
     write-host "Found $(($results | measure-object).count) references of FSP in Groups"
     write-host "Found $(($results | where {$_.translate -eq "Orphan"} | measure-object).count) references of Orphan FSP in Groups"
@@ -151,7 +154,8 @@ $results = @()
 #translate Sid
     Foreach($domain in (get-adforest).domains){
         write-host "Searching $domain"
-        $results += Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain | ForEach-Object {$fsp_translate = $null
+        $fsps = Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain
+        $results +=  $fsps | ForEach-Object {$fsp_translate = $null
             $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
 	        $_ | select $hash_domain,name, `
             @{name='Translate';expression={$fsp_translate}} | `
@@ -241,11 +245,8 @@ function launchMenu{
         2{startTranslatedObjectAdds}
         3{startFSPRemovalfromGroups -nottranslated}
         4{startFSPRemovalfromGroups}
-        5{$removefile = findlist -notamember
-            deleteFSPforever -reportfile $removefile
-        }
-        6{$restorefile = findlist -isamember
-            recoverFSPGroupMembership -reportfile $restorefile}
+        5{$removefile = findlist -notamember;deleteFSPforever -reportfile $removefile}
+        6{$restorefile = findlist -isamember;recoverFSPGroupMembership -reportfile $restorefile}
         10{CollectFSPwithNoGroupMembership;$script:allFSP = CollectFSPGroupMembership}
     }
 }

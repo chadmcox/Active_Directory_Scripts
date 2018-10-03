@@ -2,7 +2,7 @@
 #Requires -version 4.0
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID bff8254c-d342-4d67-876e-378d5ca57447
 
@@ -33,6 +33,7 @@ Source: https://github.com/chadmcox/ADPoSh/blob/master/cleanADForeignSecurityPri
 -whatif must be removed throughout if wanting to actually perform change, by doing so you acknowledge testing was done.
 !!!!!
 
+0.7added when created to the reports.  will help identify time period
 0.6
 adding previous sid cache, it occured to me that I was hitting the domain controllers multiple times to resolve the same sidd as the previous
 0.5 was leaving the connection open to the domain when i translated the fsp.  have all fsps writing to array now and work with array.
@@ -88,14 +89,14 @@ function CollectFSPGroupMembership{
         #get trust of existing domain
         #$trusted_domain_SIDs = (get-adtrust -filter {intraforest -eq $false} -Properties securityIdentifier -server $domain).securityIdentifier.value
         write-host "Searching $domain"
-        $fsps = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof -server $domain 
+        $fsps = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof,whencreated -server $domain 
         $fsps | foreach{$fsp = $_
             $fsp | select -ExpandProperty memberof | foreach{
             $group = $_
             if($fsp.Name -match "^S-\d-\d+-\d+-\d+-\d+-\d+"){$domain_sid = $matches[0]}else{$domain_sid = $null}
             #this will do a check, if the sid has already been translated or will translate if not.
             $fsp_translate = translateFSPSID -sid ($fsp).Name
-            $results += $fsp | select $hash_domain,name, `
+            $results += $fsp | select $hash_domain,$hash_whencreated,name, `
                 @{name='Translate';expression={$fsp_translate}}, `
                 @{name='TrustExist';expression={($trusted_domain_SIDs | where {$_.securityidentifier -eq $domain_sid}).target}}, `
                 @{name='Memberof';expression={$group}},DistinguishedName | `
@@ -182,10 +183,10 @@ $results = @()
 #translate Sid
     Foreach($domain in (get-adforest).domains){
         write-host "Searching $domain"
-        $fsps = Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain
+        $fsps = Get-ADObject -Filter {objectClass -eq "foreignSecurityPrincipal" -and memberof -notlike "*"} -server $domain -properties whencreated
         $results +=  $fsps | ForEach-Object {$fsp_translate = $null
             $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $_.Name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
-	        $_ | select $hash_domain,name, `
+	        $_ | select $hash_domain,$hash_whencreated,name, `
             @{name='Translate';expression={$fsp_translate}} | `
                 where {$_.name -notmatch "^S-\d-\d+-(\d+)$"}
         }
@@ -311,5 +312,7 @@ function findlist{
 }
 
 $hash_domain = @{name='Domain';expression={$domain}}
+$hash_whencreated = @{Name="whencreated";
+        Expression={($_.whencreated).ToString('MM/yyyy')}}
 $allFSP = @()
 launchMenu

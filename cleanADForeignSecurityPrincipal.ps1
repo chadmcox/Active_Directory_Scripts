@@ -44,7 +44,15 @@ adding previous sid cache, it occured to me that I was hitting the domain contro
     removes builtin sids from report
 
 .DESCRIPTION 
- This script creates reports on foreign security principals. 
+ This script creates reports on foreign security principals. Also allows admins to take action against them
+ When the script is ran a menu will load.
+ option 0 and 1 will run reports to determine scope of foreignsecurityprincipals 
+ Option 2 will take the translated foreignsecurityprincipals and put its actual object into each group the fsp is a member of
+ Option 3 removes only fsp's that are not from a trusted forest and the sid is not translatable and removes all of its group membership
+ Option 4 removes all fsp out of groups, it only does so if the fsp is orphaned or the translated object is already added to group
+ Option 5 Deletes fsp's from the list created from running option 1, this will display a list of the last 5 files generated and allow you to pick 1
+ Option 6 restores fsp group membership based on reports generated from option 0, this will display a list of the last 5 files generated and allow you to pick 1
+ Option 10 runs both option 0 and 1 reports.
 
 #> 
 Param($reportpath = "$env:userprofile\Documents")

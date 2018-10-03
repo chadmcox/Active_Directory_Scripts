@@ -33,11 +33,13 @@ Source: https://github.com/chadmcox/ADPoSh/blob/master/cleanADForeignSecurityPri
 -whatif must be removed throughout if wanting to actually perform change, by doing so you acknowledge testing was done.
 !!!!!
 
-0.7added when created to the reports.  will help identify time period
-0.6
-adding previous sid cache, it occured to me that I was hitting the domain controllers multiple times to resolve the same sidd as the previous
-0.5 was leaving the connection open to the domain when i translated the fsp.  have all fsps writing to array now and work with array.
-0.3 added menus
+ 0.8 next update needs to include ability to work from file instead of fresh query.
+    in large environment new query takes for ever even with sid translation cache ing added.
+    will have to prompt similiar to option 5 or 6.
+ 0.7 added when created to the reports.  will help identify time period
+ 0.6 adding previous sid cache, it occured to me that I was hitting the domain controllers multiple times to resolve the same sidd as the previous
+ 0.5 was leaving the connection open to the domain when i translated the fsp.  have all fsps writing to array now and work with array.
+ 0.3 added menus
     fsp removal only happens if translated object is in the same domain
     Orphan fsp removal only happens if trust does not exist.
  0.2 fixed to make sure it enumerates each domain
@@ -49,7 +51,7 @@ adding previous sid cache, it occured to me that I was hitting the domain contro
  When the script is ran a menu will load.
  option 0 and 1 will run reports to determine scope of foreignsecurityprincipals 
  Option 2 will take the translated foreignsecurityprincipals and put its actual object into each group the fsp is a member of
- Option 3 removes only fsp's that are not from a trusted forest and the sid is not translatable and removes all of its group membership
+ Option 3 removes only fsp's that are not from a trusted forest and the sid is not translatable and removes all of the FSP group membership
  Option 4 removes all fsp out of groups, it only does so if the fsp is orphaned or the translated object is already added to group
  Option 5 Deletes fsp's from the list created from running option 1, this will display a list of the last 5 files generated and allow you to pick 1
  Option 6 restores fsp group membership based on reports generated from option 0, this will display a list of the last 5 files generated and allow you to pick 1
@@ -89,7 +91,9 @@ function CollectFSPGroupMembership{
         #get trust of existing domain
         #$trusted_domain_SIDs = (get-adtrust -filter {intraforest -eq $false} -Properties securityIdentifier -server $domain).securityIdentifier.value
         write-host "Searching $domain"
-        $fsps = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof,whencreated -server $domain 
+        $fsps = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof,whencreated -server $domain
+        Write-host "Searching $domain - Done"
+        Write-host "Building Report"
         $fsps | foreach{$fsp = $_
             $fsp | select -ExpandProperty memberof | foreach{
             $group = $_

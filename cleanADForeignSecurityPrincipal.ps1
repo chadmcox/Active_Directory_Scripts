@@ -2,7 +2,7 @@
 #Requires -version 4.0
 <#PSScriptInfo
 
-.VERSION 0.5
+.VERSION 0.6
 
 .GUID bff8254c-d342-4d67-876e-378d5ca57447
 
@@ -33,6 +33,8 @@ Source: https://github.com/chadmcox/ADPoSh/blob/master/cleanADForeignSecurityPri
 -whatif must be removed throughout if wanting to actually perform change, by doing so you acknowledge testing was done.
 !!!!!
 
+0.6
+adding previous sid cache, it occured to me that I was hitting the domain controllers multiple times to resolve the same sidd as the previous
 0.5 was leaving the connection open to the domain when i translated the fsp.  have all fsps writing to array now and work with array.
 0.3 added menus
     fsp removal only happens if translated object is in the same domain
@@ -47,11 +49,28 @@ Source: https://github.com/chadmcox/ADPoSh/blob/master/cleanADForeignSecurityPri
 #> 
 Param($reportpath = "$env:userprofile\Documents")
 
+$script:previousSid = @{}
+
+function translateFSPSID{
+    param($sid)
+    $sidalreadyincache = $script:previousSid[$sid]
+    if($sidalreadyincache){
+        #Write-host "Already Resolved"
+        $fsp_translate = $script:previousSid[$sid]
+        return $fsp_translate
+    }else{
+        #Write-host "Resolving"
+        $fsp_translate = try{(([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])).value}catch{"Orphan"}
+        $script:previousSid = @{$sid=$fsp_translate}
+        return $fsp_translate
+    }
+}
+
 function CollectFSPGroupMembership{
     write-host "Collecting Groups with ForeignSecurityPrincipals"
     $results = @()
     #enumerate fsp members
-
+   
     $trusted_domain_SIDs = @()
     foreach($domain in (get-adforest).domains){
         $trusted_domain_SIDs += get-adtrust -filter {intraforest -eq $false} -Properties securityIdentifier -server $domain | select securityIdentifier,target
@@ -66,7 +85,8 @@ function CollectFSPGroupMembership{
             $fsp | select -ExpandProperty memberof | foreach{
             $group = $_
             if($fsp.Name -match "^S-\d-\d+-\d+-\d+-\d+-\d+"){$domain_sid = $matches[0]}else{$domain_sid = $null}
-            $fsp_translate = try{([System.Security.Principal.SecurityIdentifier] $fsp.name).Translate([System.Security.Principal.NTAccount])}catch{"Orphan"}
+            #this will do a check, if the sid has already been translated or will translate if not.
+            $fsp_translate = translateFSPSID -sid ($fsp).Name
             $results += $fsp | select $hash_domain,name, `
                 @{name='Translate';expression={$fsp_translate}}, `
                 @{name='TrustExist';expression={($trusted_domain_SIDs | where {$_.securityidentifier -eq $domain_sid}).target}}, `
@@ -193,7 +213,8 @@ function startFSPRemovalfromGroups{
     $allfsp | foreach {
         $tranobj = ($_).Translate
         $tranobj = $tranobj -split '\\'
-        RemoveFSPFromGroup -fsp ($_).name -adgroupdn ($_).Memberof -adgroupdomain ($_).domain -FSPDomain $tranobj[0] -FSPObject $tranobj[1]
+        RemoveFSPFromGroup -fsp ($_).name -adgroupdn ($_).Memberof -adgroupdomain ($_).domain `
+            -FSPDomain $tranobj[0] -FSPObject $tranobj[1]
     }
 }
 function deleteFSPforever{
@@ -257,7 +278,8 @@ function findlist{
     if($isamember){
         #this will pull the possible list to remove fsp out of group membership
         $process = "restore fsp in group membership"
-        $selection = Get-ChildItem -Path "$reportpath\*" -Include reportForeignSecurityPricipalsGroupMembership* | sort LastWriteTime | select -last 5 | foreach{
+        $selection = Get-ChildItem -Path "$reportpath\*" -Include reportForeignSecurityPricipalsGroupMembership* | `
+            sort LastWriteTime | select -last 5 | foreach{
             $_ | select fullname, `
             @{name='Option';expression={$i}}
             $i++
@@ -265,7 +287,8 @@ function findlist{
     }elseif($notamember){
         #this will pull the list of fsp that are best to delete from AD
         $process = "removal of fsp from AD"
-        $selection = Get-ChildItem -Path "$reportpath\*" -Include reportForeignSecurityPricipalsNoGroupMemberShips* | sort LastWriteTime | select -last 5 | foreach{
+        $selection = Get-ChildItem -Path "$reportpath\*" -Include reportForeignSecurityPricipalsNoGroupMemberShips* | `
+            sort LastWriteTime | select -last 5 | foreach{
             $_ | select fullname, `
             @{name='Option';expression={$i}}
             $i++

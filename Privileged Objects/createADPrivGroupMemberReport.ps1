@@ -156,7 +156,7 @@ function getDateAddedtoGroup{
             foreach {
                 $metadata = [XML]$_.Replace("`0","")
                 if(($metadata).DS_REPL_VALUE_META_DATA | where {$_.pszAttributeName -eq "member" -and $_.pszObjectDn -eq $udn}){
-                    (($metadata).DS_REPL_VALUE_META_DATA | where {$_.pszAttributeName -eq "member" -and $_.pszObjectDn -eq $udn}).ftimeCreated
+                    (($metadata).DS_REPL_VALUE_META_DATA | where {$_.pszAttributeName -eq "member" -and $_.pszObjectDn -eq $udn}).ftimeLastOriginatingChange
                     }
             }
 

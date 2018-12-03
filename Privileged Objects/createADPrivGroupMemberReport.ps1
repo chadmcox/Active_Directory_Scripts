@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 0.3
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -62,7 +62,7 @@ Param($reportpath = "$env:userprofile\Documents")
 #https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admin-or-how-to-track-the-group-membership/
 #https://blogs.technet.microsoft.com/ashleymcglone/2014/12/17/forensics-monitor-active-directory-privileged-groups-with-powershell/
 
-$default_log = "$reportpath\report_privileged_group_members.csv"
+$default_log = "$reportpath\reportPrivilegedGroupMembers_$(get-date -f yyyy-MM-dd).csv"
 
 
 $privileged_groups = @()
@@ -76,10 +76,10 @@ function getPrivilegedGroups{
     #pulls back the major privileged groups, and all groups with admin count set
     $admincount_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
                 -filter 'admincount -eq 1 -and iscriticalsystemobject -notlike "*"' `
-                 -server $domain -Properties * | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory}
+                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
     $privileged_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
                 -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
-                 -server $domain -Properties * | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory}
+                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
 
     #creates a legit list of privileged groups, can easily add a else statement to report on groups with
     #stale admin count
@@ -91,9 +91,9 @@ function getPrivilegedGroups{
         $admincount_groups | foreach{
             $admincount_group_dn = $_.distinguishedname
             if(Get-ADgroup -Filter {member -RecursiveMatch $admincount_group_dn} `
-                -searchbase $privileged_group_dn -server $privileged_group_domain){
+                -searchbase $privileged_group_dn -server $privileged_group_domain -Properties *,"msDS-ReplValueMetaData"){
                 $privileged_groups += $_ | select domain, distinguishedname,samaccountname,objectsid, `
-                    @{name='GroupRelatedTo';expression={$privileged_group_sam}},viaSidHistory
+                    @{name='GroupRelatedTo';expression={$privileged_group_sam}},viaSidHistory,"msDS-ReplValueMetaData"
             } 
         }
     }
@@ -143,46 +143,69 @@ Function collectADPrivilegedGroupChanges{
                 ($metadata).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" } | foreach{
                     $priv_user = checkADUserSecurity -userdn  $($_.pszObjectDn) -domain $domain
                     $results += $_ | select $hash_domain,$hash_sam,`
-                    $hash_ftloc,$hash_operation,pszAttributeName,pszObjectDn,dwVersion,$hash_ctpg ,`
+                    $hash_ftloc,$hash_operation,pszAttributeName,pszObjectDn,dwVersion ,`
                     ftimeDeleted,ftimeCreated 
             }
         }
     }
     $results
 }
+function getDateAddedtoGroup{
+    param($group,$udn)
+    $group | Select-Object -ExpandProperty "msDS-ReplValueMetaData" |`
+            foreach {
+                $metadata = [XML]$_.Replace("`0","")
+                if(($metadata).DS_REPL_VALUE_META_DATA | where {$_.pszAttributeName -eq "member" -and $_.pszObjectDn -eq $udn}){
+                    (($metadata).DS_REPL_VALUE_META_DATA | where {$_.pszAttributeName -eq "member" -and $_.pszObjectDn -eq $udn}).ftimeCreated
+                    }
+            }
+
+}
 function searchforobjectwithsidhistory{
     param($group)
     $sid = $group.objectSid
     #$sid 
     foreach($domain in (get-adforest).domains){
-        try{get-adobject -filter {sidhistory -eq $sid} -server $domain -Properties * | select `
+        try{get-adobject -filter {sidhistory -eq $sid} -server $domain -Properties *,"msDS-ReplValueMetaData" | select `
             $hash_domain,distinguishedname,SamAccountName,objectSid, `
             @{name='GroupRelatedTo';expression={$group.samaccountname}}, `
-            @{name='viaSidHistory';expression={$true}}}
+            @{name='viaSidHistory';expression={$true}},"msDS-ReplValueMetaData"}
         catch{}
     }
 }
 function searchforprimarygroupmembership{
-    param($sid,$domain,$group,$from,$sh)
+    param($gp)
+        $group = $gp.samaccountname
+        $domain = $gp.domain
+        $from = $gp.GroupRelatedTo
+        $sh = $gp.viaSidHistory
+        $sid = $gp.objectsid
     $rid = $sid.tostring().split("-")[7]
     try{get-aduser -filter {primaryGroupId -eq $rid} -server $domain -Properties * | select `
         @{name='Domain';expression={$domain}}, `
         @{name='GroupRelatedTo';expression={$from}}, `
-        @{name='Group';expression={$group}}, `
-        distinguishedname, samaccountname,ObjectClass,enabled,$hash_AccountNotDelegated, `
-        $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_vsh,$hash_protected}catch{}
+        @{name='Group';expression={$gp.samaccountname}}, `
+        @{name='AddedtoGroup';expression={}}, `
+        distinguishedname, samaccountname,ObjectClass,enabled, `
+        $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected,$hash_vsh}catch{}
+        
 }
 function enumerateGroupMember{
-    param($group,$domain,$from,$sh)
+    param($gp)
+        $group = $gp.samaccountname
+        $domain = $gp.domain
+        $from = $gp.GroupRelatedTo
+        $sh = $gp.viaSidHistory
     get-adgroup $group -server $domain -Properties members | select -ExpandProperty members | foreach{
         foreach($d in (get-adforest).domains){
             try{get-adobject -filter {distinguishedname -eq $_} -Properties * -server $d | select `
             @{name='Domain';expression={$domain}}, `
             @{name='GroupRelatedTo';expression={$from}}, `
             @{name='Group';expression={$group}}, `
+            @{name='AddedtoGroup';expression={get-date $(getDateAddedtoGroup -group $gp -udn $_.distinguishedname) -f MM/dd/yyyy}}, `
             distinguishedname, samaccountname,ObjectClass,$hash_enabled, `
-            $hash_AccountNotDelegated,$hash_pwdLastSet,$hash_lastLogonTimestamp, `
-            $hash_vsh,$hash_protected}catch{}
+            $hash_pwdLastSet,$hash_lastLogonTimestamp, `
+            $hash_AccountNotDelegated,$hash_protected,$hash_vsh}catch{}
         }
      }
 }
@@ -194,22 +217,20 @@ function collectPrivilegedUsers{
     #enumerate found group members
     write-host "Gathering Privileged Groups Members"
     foreach($pg in $privileged_groups){
-        $results += enumerateGroupMember -group $pg.samaccountname -domain $pg.domain `
-            -from $pg.GroupRelatedTo -sh $pg.viaSidHistory
+        $results += enumerateGroupMember -gp $pg
     }
-    write-host "Gathering Privileged Groups Primary Members "
+    write-host "Gathering Privileged Groups Primary Members"
     #enumerate users with changed primary group
     foreach($pg in $privileged_groups){
-        $results += searchforprimarygroupmembership -group $pg.samaccountname -domain $pg.domain `
-            -sid $pg.objectsid -from $pg.GroupRelatedTo -sh $pg.viaSidHistory
+        $results += searchforprimarygroupmembership -gp $pg
     }
-    $results | sort group
+    $results | sort domain, group, grouprelatedto,addedtogroup
 }
 
 
 #region hash calculated properties
     #creating hash tables for each calculated property
-    $hash_AccountNotDelegated = @{name='CannotBeDelegated';expression={if($_.useraccountcontrol -band 1048576){$true}else{$false}}}
+    $hash_AccountNotDelegated = @{name='CannotBeDelegated';expression={if($_.useraccountcontrol -band 1048576){$true}}}
     $hash_enabled = @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}
     $hash_pwdexpired = @{name='PasswordExpired';expression={if($_.useraccountcontrol -band 8388608){$true}else{$false}}}
     $hash_vsh = @{name='viaSidHistory';expression={$sh}}
@@ -217,8 +238,7 @@ function collectPrivilegedUsers{
     $hash_sam = @{name='Group';expression={$samaccountname}}
     $hash_ftloc = @{name='ftimeLastOriginatingChange';expression={$_.ftimeLastOriginatingChange |  get-date -Format MM/dd/yyyy}}
     $hash_operation = @{name='Operation';expression={If($_.ftimeDeleted -ne "1601-01-01T00:00:00Z"){"Removed"}Else{"Added"}}}
-    $hash_ctpg = @{name='ChangedtoPrimaryGroup';expression={If( $priv_user | `
-                                where {$_.primaryGroupId -eq ($grp | % {$_.sid.tostring().split("-")[7]})}){$true}else{$false}}}
+    
     $hash_risk = @{name='SecurityRisk';expression={$securityRisk}}
     $hash_Protected = @{name='ProtectionsEnabled';expression={if($_.objectclass -eq "user"){isinProtectedUsers -udn $_.distinguishedname}}}
     $hash_pwdLastSet = @{Name="pwdLastSet";
@@ -237,3 +257,4 @@ $protected_users_groups = foreach($domain in (get-adforest).domains){get-adgroup
 $results = collectPrivilegedUsers
 $results | out-gridview
 $results | export-csv $default_log -NoTypeInformation
+

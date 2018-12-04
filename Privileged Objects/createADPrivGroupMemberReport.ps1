@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.4
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -112,44 +112,7 @@ Function isinProtectedUsers{
     }
 
 }
-Function checkADUserSecurity{
-    param($userdn,$domain)
-    $userproperties = @("AccountNotDelegated","primaryGroupId","Trustedfordelegation","TrustedToAuthForDelegation","pwdlastset","expired")
-    try{$user = Get-Aduser -Identity $($_.pszObjectDn) `
-                -Properties $userproperties -server "$($domain):3268"}
-    catch{}
-    $user
-}
-Function collectADPrivilegedGroupChanges{
-    #enumerate through the newest list of legit admincount groups, and pull back the replication metadata
-    #one addition is if a user's primary group membership is change to the group, it looks like the user
-    #was removed from the group.  I perform a check to validate
 
-    $results = @()
-    $groupproperties = @("msDS-ReplValueMetaData","WhenChanged","SamAccountName")
-
-    if(!($privileged_groups)){
-        $privileged_groups = getPrivilegedGroups
-    }
-
-    $privileged_groups  | foreach{
-        $distinguishedname = $_.distinguishedname
-        $samaccountname = $_.samaccountname
-        $domain = $_.domain
-        Get-ADGroup $distinguishedname -Properties $groupproperties -Server $domain `
-                -PipelineVariable grp | Select-Object -ExpandProperty "msDS-ReplValueMetaData" |`
-            foreach {
-                $metadata = [XML]$_.Replace("`0","")
-                ($metadata).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" } | foreach{
-                    $priv_user = checkADUserSecurity -userdn  $($_.pszObjectDn) -domain $domain
-                    $results += $_ | select $hash_domain,$hash_sam,`
-                    $hash_ftloc,$hash_operation,pszAttributeName,pszObjectDn,dwVersion ,`
-                    ftimeDeleted,ftimeCreated 
-            }
-        }
-    }
-    $results
-}
 function getDateAddedtoGroup{
     param($group,$udn)
     $group | Select-Object -ExpandProperty "msDS-ReplValueMetaData" |`
@@ -236,15 +199,11 @@ function collectPrivilegedUsers{
     $hash_vsh = @{name='viaSidHistory';expression={$sh}}
     $hash_domain = @{name='Domain';expression={$domain}}
     $hash_sam = @{name='Group';expression={$samaccountname}}
-    $hash_ftloc = @{name='ftimeLastOriginatingChange';expression={$_.ftimeLastOriginatingChange |  get-date -Format MM/dd/yyyy}}
-    $hash_operation = @{name='Operation';expression={If($_.ftimeDeleted -ne "1601-01-01T00:00:00Z"){"Removed"}Else{"Added"}}}
-    
-    $hash_risk = @{name='SecurityRisk';expression={$securityRisk}}
     $hash_Protected = @{name='inProtectUsersGroup';expression={if($_.objectclass -eq "user"){isinProtectedUsers -udn $_.distinguishedname}}}
     $hash_pwdLastSet = @{Name="pwdLastSet";
         Expression={if($_.PwdLastSet -ne 0 -and $_.objectclass -eq "user"){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
     $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
-        Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
+        Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
     $hash_PwdAgeinDays = @{Name="PwdAgeinDays";
         Expression={if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{0}}}
 #endregion
@@ -257,4 +216,12 @@ $protected_users_groups = foreach($domain in (get-adforest).domains){get-adgroup
 $results = collectPrivilegedUsers
 $results | out-gridview
 $results | export-csv $default_log -NoTypeInformation
+cls
+$results | select domain -Unique | foreach{
+    $filter_domain = $_.domain; $filter_domain | Out-Host
+    $results | where {$_.domain -eq $filter_domain} | group group | select name, count | out-host
+}
+
+write-host "# of objects permissioned via sid history: $(($results | where {$_.viaSidHistory -eq $true}).count)"
+write-host "Results can be found here $default_log"
 

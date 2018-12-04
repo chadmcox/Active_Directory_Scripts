@@ -240,7 +240,7 @@ function collectPrivilegedUsers{
     $hash_operation = @{name='Operation';expression={If($_.ftimeDeleted -ne "1601-01-01T00:00:00Z"){"Removed"}Else{"Added"}}}
     
     $hash_risk = @{name='SecurityRisk';expression={$securityRisk}}
-    $hash_Protected = @{name='ProtectionsEnabled';expression={if($_.objectclass -eq "user"){isinProtectedUsers -udn $_.distinguishedname}}}
+    $hash_Protected = @{name='inProtectUsersGroup';expression={if($_.objectclass -eq "user"){isinProtectedUsers -udn $_.distinguishedname}}}
     $hash_pwdLastSet = @{Name="pwdLastSet";
         Expression={if($_.PwdLastSet -ne 0 -and $_.objectclass -eq "user"){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
     $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";

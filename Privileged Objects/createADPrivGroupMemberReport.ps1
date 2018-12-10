@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.4
+.VERSION 0.5
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -150,7 +150,8 @@ function searchforprimarygroupmembership{
         @{name='Group';expression={$gp.samaccountname}}, `
         @{name='AddedtoGroup';expression={}}, `
         distinguishedname, samaccountname,ObjectClass,enabled, `
-        $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected,$hash_vsh}catch{}
+        $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
+        $hash_PasswordNeverExpires,$hash_KerberosEncryptionType,$hash_vsh}catch{}
         
 }
 function enumerateGroupMember{
@@ -167,8 +168,8 @@ function enumerateGroupMember{
             @{name='Group';expression={$group}}, `
             @{name='AddedtoGroup';expression={get-date $(getDateAddedtoGroup -group $gp -udn $_.distinguishedname) -f MM/dd/yyyy}}, `
             distinguishedname, samaccountname,ObjectClass,$hash_enabled, `
-            $hash_pwdLastSet,$hash_lastLogonTimestamp, `
-            $hash_AccountNotDelegated,$hash_protected,$hash_vsh}catch{}
+            $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
+            $hash_PasswordNeverExpires,$hash_KerberosEncryptionType,$hash_vsh}catch{}
         }
      }
 }
@@ -193,7 +194,10 @@ function collectPrivilegedUsers{
 
 #region hash calculated properties
     #creating hash tables for each calculated property
+    $hash_PasswordNeverExpires = @{Name="PasswordNeverExpires";
+        Expression={if($_.UserAccountControl -band 65536){$True}else{$False}}}
     $hash_AccountNotDelegated = @{name='CannotBeDelegated';expression={if($_.useraccountcontrol -band 1048576){$true}}}
+    $hash_KerberosEncryptionType = @{name='KerberosEncryptionType';expression={[string]$_.KerberosEncryptionType}}
     $hash_enabled = @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}
     $hash_pwdexpired = @{name='PasswordExpired';expression={if($_.useraccountcontrol -band 8388608){$true}else{$false}}}
     $hash_vsh = @{name='viaSidHistory';expression={$sh}}

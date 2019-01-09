@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.5
+.VERSION 0.6
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -39,6 +39,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.6 added a bunch of other groups to be checked
 0.2 added cert publisher
 0.1 First go around of the script
 
@@ -80,6 +81,11 @@ function getPrivilegedGroups{
     $privileged_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
                 -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
                  -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+    #additional groups
+    $privileged_groups += (get-adforest).domains | foreach{$domain = $_; get-adgroup `
+                -filter 'samaccountname -eq "Schema Admins" -or samaccountname -eq "Group Policy Creator Owners" -or samaccountname -eq "Key Admins" -or samaccountname -eq "Enterprise Key Admins" -or samaccountname -eq "Remote Desktop Users" -or samaccountname -eq "Cryptographic Operators"' `
+                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+
 
     #creates a legit list of privileged groups, can easily add a else statement to report on groups with
     #stale admin count
@@ -228,4 +234,3 @@ $results | select domain -Unique | foreach{
 
 write-host "# of objects permissioned via sid history: $(($results | where {$_.viaSidHistory -eq $true}).count)"
 write-host "Results can be found here $default_log"
-

@@ -85,12 +85,14 @@ function getPrivilegedGroups{
     $privileged_groups += (get-adforest).domains | foreach{$domain = $_; get-adgroup `
                 -filter 'samaccountname -eq "Schema Admins" -or samaccountname -eq "Group Policy Creator Owners" -or samaccountname -eq "Key Admins" -or samaccountname -eq "Enterprise Key Admins" -or samaccountname -eq "Remote Desktop Users" -or samaccountname -eq "Cryptographic Operators"' `
                  -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
-
+    $privileged_groups += (get-adforest).domains | foreach{$domain = $_; get-adgroup `
+                -filter '(iscriticalsystemobject -like "*") -and (samaccountname -ne "Domain Users") -and (samaccountname -ne "Domain Controllers")' `
+                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
 
     #creates a legit list of privileged groups, can easily add a else statement to report on groups with
     #stale admin count
 
-    $privileged_groups | foreach{
+    $privileged_groups | select * -unique | foreach{
         $privileged_group_domain = $_.domain
         $privileged_group_dn = $_.distinguishedname
         $privileged_group_sam = $_.samaccountname

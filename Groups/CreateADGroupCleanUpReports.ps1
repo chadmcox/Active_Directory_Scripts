@@ -1,7 +1,10 @@
+#Requires -Module ActiveDirectory
+#Requires -version 3.0
+#Requires -RunAsAdministrator
 
 <#PSScriptInfo
 
-.VERSION 0.13
+.VERSION 0.14
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -25,21 +28,8 @@ and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
 against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
-.TAGS AD Groups
-
-.LICENSEURI 
-
-.PROJECTURI 
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS 
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
 .RELEASENOTES
+0.14 cleanup of reports created new report that contains details.
 0.13 cleaned up dates
 0.12 move the circular nesting check to be the last thing ran.  was causing a timeout.
 0.11 had to make functions global also added direct member count
@@ -48,14 +38,6 @@ from the use or distribution of the Sample Code..
 0.8 Added ou by ou search scope to make impact against dc better.
 0.1 First go around of the script
 
-.PRIVATEDATA 
-
-#>
-
-#Requires -Module ActiveDirectory
-#Requires -version 3.0
-#Requires -RunAsAdministrator
-<# 
 
 .DESCRIPTION 
  Creates reports about Active Directory Groups
@@ -78,15 +60,15 @@ If (!($(Try { Test-Path "$reportpath\Groups"} Catch { $true }))){
 cd $reportpath
 $script:ous = @()
 $script:finished = @()
-$global:singleuse_group = $false
+$singleuse_group = $false
 
-function global:GroupDisplayFunctionResults{
-    if($global:singleuse_group){$script:finished
+function GroupDisplayFunctionResults{
+    if($singleuse_group){$script:finished
                 write-host "Report Can be found here $reportpath"
                 $script:finished = @()
     }
 }
-Function global:ADOUList{
+Function ADOUList{
     [cmdletbinding()]
     param()
     process{
@@ -109,7 +91,7 @@ Function global:ADOUList{
         $script:ous = import-csv $script:ou_list
     }
 }
-function global:ADPrivilegedGroupsWithSidHistory{
+function ADPrivilegedGroupsWithSidHistory{
     [cmdletbinding()]
     param()
     process{
@@ -126,9 +108,9 @@ function global:ADPrivilegedGroupsWithSidHistory{
             $results += get-adgroup -filter 'admincount -eq 1 -and iscriticalsystemobject -like "*" -and sIDHistory -like "*"' `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
                  -properties samaccountname,Name,groupscope,groupcategory,admincount,iscriticalsystemobject, `
-                    whencreated,whenchanged,description,managedby | `
+                    whencreated,whenchanged | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,iscriticalsystemobject,`
-                    $hash_whenchanged,$hash_whencreated,description,managedby,$hash_parentou
+                    $hash_whenchanged,$hash_whencreated,$hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
 
@@ -138,7 +120,7 @@ function global:ADPrivilegedGroupsWithSidHistory{
         }
     }
 }
-function global:ADGroupsWithNoMembers{
+function ADGroupsWithNoMembers{
     [cmdletbinding()]
     param()
     process{
@@ -154,9 +136,9 @@ function global:ADGroupsWithNoMembers{
             $results += get-adgroup -LDAPFilter "(&(!(member=*))(!(IsCriticalSystemObject=TRUE)))" `
                  -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
                  -properties samaccountname,Name,groupscope,groupcategory,admincount,`
-                 iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
+                 iscriticalsystemobject,whencreated,whenchanged,objectSid | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,description,managedby,`
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,`
                     @{name='Rid';expression={[int]($_.objectsid -split("-"))[7]}},`
                     $hash_parentou,distinguishedname | `
                 where {$_.Rid -gt 1000}
@@ -169,15 +151,17 @@ function global:ADGroupsWithNoMembers{
         }
     }
 }
-function global:ADGroupsWithCircularNesting{
+function ADGroupsWithCircularNesting{
     [cmdletbinding()]
     param()
     process{
         $function_list += "ADGroupsWithCircularNesting"
         write-host "Starting Function ADGroupsWithCircularNesting"
         $default_log = "$reportpath\Groups\report_ADGroupsWithCircularNesting.csv"
-        $expanded_groups_log = "$reportpath\Groups\report_ADGroupsExpanded.csv"
+        $expanded_groups_log = "$reportpath\Groups\report_ADGroupsMemberof.csv"
         If ($(Try { Test-Path $expanded_groups_log} Catch { $false })){Remove-Item $expanded_groups_log -force}
+        $script:full_expanded_groups_log = "$reportpath\Groups\report_ADGroupsFullExpanded.csv"
+        If ($(Try { Test-Path $script:full_expanded_groups_log} Catch { $false })){Remove-Item $script:full_expanded_groups_log -force}
         $results = @(); $groups = @()
         $script:searched_groups = @()
         $script:nested_groups = @()
@@ -221,8 +205,8 @@ function global:ADGroupsWithCircularNesting{
         }
     }
 }
-function global:expand-adgroup{
-    param($groupDN,$originalDN)
+function expand-adgroup{
+    param($groupDN,$originalDN,[switch]$expand)
 
     #Links I used to make this
     #http://blogs.msdn.com/b/adpowershell/archive/2009/09/05/token-bloat-troubleshooting-by-analyzing-group-nesting-in-ad.aspx
@@ -233,10 +217,14 @@ function global:expand-adgroup{
     #nice article around powershell parameter validation
     #http://blogs.technet.com/b/heyscriptingguy/archive/2011/05/15/simplify-your-powershell-script-with-parameter-validation.aspx
 
+    
+
     Process{
         #write-debug $groupDN
         $script:searched_groups += $groupDN
         #filter where group is same as groupdn loop through all group member of
+        
+
         $script:expanded_groups | Foreach {
             if($_.group -eq $groupDN){
                 #is the parent group 
@@ -251,13 +239,17 @@ function global:expand-adgroup{
                         }
                     }
                 }else{
-                    expand-adgroup -groupDN $_.memberof -originalDN $originalDN
+                    if($expand){
+                        $script:expanded_groups += $_ | select @{Name="group";Expression={$originalDN}},memberof
+                        expand-adgroup -groupDN $_.memberof -originalDN $originalDN -expand
+                    }else{
+                        expand-adgroup -groupDN $_.memberof -originalDN $originalDN}
                 }   
             }        
         }
     }
 }
-function global:ADGroupsWithSIDHistoryFromSameDomain{
+function ADGroupsWithSIDHistoryFromSameDomain{
     [cmdletbinding()]
     param()
     process{
@@ -288,7 +280,7 @@ function global:ADGroupsWithSIDHistoryFromSameDomain{
         }
     }
 }
-function global:ADGroupsWithStaleAdminCount{
+function ADGroupsWithStaleAdminCount{
     [cmdletbinding()]
     param()
     process{
@@ -334,7 +326,7 @@ function global:ADGroupsWithStaleAdminCount{
         }
     }
 }
-function global:ADGroupsNeverUsed{
+function ADGroupsNeverUsed{
     [cmdletbinding()]
     param()
     process{
@@ -366,7 +358,7 @@ function global:ADGroupsNeverUsed{
         }
     }
 }
-function global:ADGroupswhenMembershipsLastChange{
+function ADGroupswhenMembershipsLastChange{
     [cmdletbinding()]
     param()
     process{
@@ -379,11 +371,11 @@ function global:ADGroupswhenMembershipsLastChange{
                 -server $domain | where {$_.DistinguishedName -NotLike "*CN=System,DC*"}).DistinguishedName){
                 $results += get-adgroup -LDAPFilter "(&(member=*)(!(IsCriticalSystemObject=TRUE)))" `
                     -Properties "msDS-ReplValueMetaData",samaccountname,GroupCategory,GroupScope,"msDS-ReplValueMetaData",`
-                        WhenCreated,WhenChanged,description,managedby,objectSid,admincount -server $domain `
+                        WhenCreated,WhenChanged,objectSid,admincount -server $domain `
                 -searchbase $object_location -SearchScope OneLevel | `
                     select $hash_domain,samaccountname,groupcategory,groupscope,$hash_whencreated,$hash_whenchanged,`
-                        @{name='MembershipLastChanged';expression={($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" }}| select -first 1).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}},`
-                        isCriticalSystemObject,admincount,description,managedby,$hash_parentou
+                        @{name='MembershipLastChanged';expression={[string]($_ | Select-Object -ExpandProperty "msDS-ReplValueMetaData" | foreach {([XML]$_.Replace("`0","")).DS_REPL_VALUE_META_DATA | where { $_.pszAttributeName -eq "member" }}| select -first 1).ftimeLastOriginatingChange | get-date -Format MM/dd/yyyy}},`
+                        isCriticalSystemObject,admincount,$hash_parentou,distinguishedname
             }
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -394,7 +386,7 @@ function global:ADGroupswhenMembershipsLastChange{
         }
     }
 }
-function global:ADGroupsAssignedbyAMACertificate{
+function ADGroupsAssignedbyAMACertificate{
     [cmdletbinding()]
     param()
     Process{
@@ -417,7 +409,7 @@ function global:ADGroupsAssignedbyAMACertificate{
         }
     }
 }
-function global:ADGroupswithPSOApplied{
+function ADGroupswithPSOApplied{
     [cmdletbinding()]
     param()
     process{
@@ -428,9 +420,9 @@ function global:ADGroupswithPSOApplied{
         foreach($domain in (get-adforest).domains){
             $results += get-adgroup -LDAPFilter "(msDS-PSOApplied=*)" `
                 -Properties "msDS-PSOApplied",whencreated,groupscope,groupcategory, `
-                    description,managedby,objectSid,isCriticalSystemObject -server $domain | `
+                    objectSid,isCriticalSystemObject -server $domain | `
                 select $hash_domain,samaccountname,groupcategory,groupscope,$hash_whencreated,"msDS-PSOApplied",`
-                    isCriticalSystemObject,$hash_parentou,description,managedby
+                    isCriticalSystemObject,$hash_parentou
 
         }
         $results | export-csv $default_log -NoTypeInformation
@@ -440,7 +432,7 @@ function global:ADGroupswithPSOApplied{
         }
     }
 }
-Function global:ADGroupsFoundinRootofDomain{
+Function ADGroupsFoundinRootofDomain{
 [cmdletbinding()]
     param()
     process{
@@ -463,7 +455,7 @@ Function global:ADGroupsFoundinRootofDomain{
         }
     }
 }
-function global:ADGroupsWithNoDisplayName{
+function ADGroupsWithNoDisplayName{
     [cmdletbinding()]
     param()
     process{
@@ -486,7 +478,7 @@ function global:ADGroupsWithNoDisplayName{
                  -properties samaccountname,groupscope,groupcategory,admincount,`
                  iscriticalsystemobject,whencreated,whenchanged,description,managedby,objectSid | `
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
-                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,description,managedby,`
+                    iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,`
                     @{name='Rid';expression={$([int]($_.objectsid -split("-"))[7])}},`
                     $hash_parentou | `
                 where {$_.Rid -gt 1000}
@@ -499,7 +491,32 @@ function global:ADGroupsWithNoDisplayName{
         }
     }
 }
-function global:ADGroupsMemberCount{
+Function ADGroupDetails{
+    [cmdletbinding()]
+    param()
+    process{
+        
+        $function_list += "ADGroupsDetails"
+        write-host "Starting Function ADGroupDetails"
+        $default_log = "$reportpath\Groups\report_ADGroupsDetails.csv"
+        $results = @()
+        
+        if(!($script:ous)){
+            ADOUList
+        }
+        foreach($ou in $script:ous){$domain = ($ou).domain
+            $results += get-adgroup -filter * `
+                 -searchbase $ou.DistinguishedName -SearchScope OneLevel -server $domain `
+                 -properties description,managedby,Distinguishedname | `
+                 select $hash_domain,samaccountname,Distinguishedname,description,managedby,`
+                    $hash_parentou
+        }
+        $results | export-csv $default_log -NoTypeInformation
+
+        
+    }
+}
+function ADGroupsMemberCount{
     [cmdletbinding()]
     param()
     process{
@@ -524,7 +541,7 @@ function global:ADGroupsMemberCount{
                  select $hash_domain,samaccountname,groupscope,groupcategory,admincount,`
                     iscriticalsystemobject,$hash_whencreated,$hash_whenchanged,`
                     @{name='DirectMemberCount';expression={($_.Member).count}},`
-                    description,managedby,$hash_parentou
+                    $hash_parentou
         }
         $results | export-csv $default_log -NoTypeInformation
         $default_log = "$reportpath\groups\report_ADGroupsMembersover50k.csv"
@@ -571,7 +588,7 @@ if(!($importfunctionsonly)){
     $script:finished
     write-host "Report Can be found here $reportpath"
 }else{
-    $global:singleuse_group = $True
+    $singleuse_group = $True
     write-host -foreground yellow "Type out the function and press enter to run a particular report"
     (dir function: | where name -like adgroup*).name
 }

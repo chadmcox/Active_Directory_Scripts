@@ -4,7 +4,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.14
+.VERSION 0.VERSION 0.15
 
 .GUID 5e7bfd24-88b8-4e4d-99fd-c4ffbfcf5be6
 
@@ -29,6 +29,8 @@ against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
 .RELEASENOTES
+0.15 created new report that shows last changed from meta data for groups that only have
+    users as members
 0.14 cleanup of reports created new report that contains details.
 0.13 cleaned up dates
 0.12 move the circular nesting check to be the last thing ran.  was causing a timeout.
@@ -187,7 +189,9 @@ function ADGroupsWithCircularNesting{
                 }
             }
         
-
+        #kicking off a different function to create a report of groups that only have user members
+        CreateCleanADGroupMemlastChange
+        write-host "Continueing Function ADGroupsWithCircularNesting"
         $script:expanded_groups = import-csv $expanded_groups_log
 
         $groups | foreach {
@@ -555,6 +559,34 @@ function ADGroupsMemberCount{
         }
     }
 }
+Function CreateCleanADGroupMemlastChange{
+[cmdletbinding()]
+    param()
+    process{
+    #the goal of this is to only have groups that do not have any groups nested.  
+        write-host "Starting Function CreateCleanADGroupMemlastChange"
+        $groups_with_group_members = import-csv "$reportpath\Groups\report_ADGroupsMemberof.csv" | select Memberof -Unique
+        $groups_with_last_change = import-csv "$reportpath\Groups\report_ADGroupswhenMembershipsLastChange.csv"
+        $default_log = "$reportpath\Groups\report_ADGroupswithonlyusermemberslastchanged.csv"
+        $results = @()
+        foreach($grp in $groups_with_last_change){
+            $found = $false
+            
+            foreach($grpwng in $groups_with_group_members){
+                
+                if(($grpwng).memberof -eq ($grp).distinguishedname){
+                    
+                    $found = $true
+                    break
+                }
+            }
+            if(!($found)){
+                $results += $grp
+            }
+        }
+            $results | export-csv $default_log -NoTypeInformation
+    }
+}
 #region hash calculated properties
 $hash_domain = @{name='Domain';expression={$domain}}
 $hash_parentou = @{name='ParentOU';expression={`
@@ -592,5 +624,4 @@ if(!($importfunctionsonly)){
     write-host -foreground yellow "Type out the function and press enter to run a particular report"
     (dir function: | where name -like adgroup*).name
 }
-    
-
+  

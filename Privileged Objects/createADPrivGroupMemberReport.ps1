@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.7
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -39,6 +39,7 @@ from the use or distribution of the Sample Code..
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+0.7 added some other things like critical flag
 0.6 added a bunch of other groups to be checked
 0.2 added cert publisher
 0.1 First go around of the script
@@ -63,7 +64,8 @@ Param($reportpath = "$env:userprofile\Documents")
 #https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admin-or-how-to-track-the-group-membership/
 #https://blogs.technet.microsoft.com/ashleymcglone/2014/12/17/forensics-monitor-active-directory-privileged-groups-with-powershell/
 
-$default_log = "$reportpath\reportPrivilegedGroupMembers_$(get-date -f yyyy-MM-dd).csv"
+$default_critical_log = "$reportpath\reportCriticalPrivilegedGroupMembers_$(get-date -f yyyy-MM-dd).csv"
+$default_log = "$reportpath\reportOtherPrivilegedGroupMembers_$(get-date -f yyyy-MM-dd).csv"
 
 
 $privileged_groups = @()
@@ -153,13 +155,13 @@ function searchforprimarygroupmembership{
         $sid = $gp.objectsid
     $rid = $sid.tostring().split("-")[7]
     try{get-aduser -filter {primaryGroupId -eq $rid} -server $domain -Properties * | select `
-        @{name='Domain';expression={$domain}}, `
+        @{name='Domain';expression={$domain}},$hash_critical, `
         @{name='GroupRelatedTo';expression={$from}}, `
         @{name='Group';expression={$gp.samaccountname}}, `
         @{name='AddedtoGroup';expression={}}, `
         distinguishedname, samaccountname,ObjectClass,enabled, `
-        $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
-        $hash_PasswordNeverExpires,$hash_KerberosEncryptionType,$hash_vsh}catch{}
+        $hash_pwdLastSet,$hash_PwdAgeinDays,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
+        $hash_PasswordNeverExpires,$hash_EncryptionType,$hash_vsh}catch{}
         
 }
 function enumerateGroupMember{
@@ -171,13 +173,13 @@ function enumerateGroupMember{
     get-adgroup $group -server $domain -Properties members | select -ExpandProperty members | foreach{
         foreach($d in (get-adforest).domains){
             try{get-adobject -filter {distinguishedname -eq $_} -Properties * -server $d | select `
-            @{name='Domain';expression={$domain}}, `
+            @{name='Domain';expression={$domain}},$hash_critical, `
             @{name='GroupRelatedTo';expression={$from}}, `
             @{name='Group';expression={$group}}, `
             @{name='AddedtoGroup';expression={get-date $(getDateAddedtoGroup -group $gp -udn $_.distinguishedname) -f MM/dd/yyyy}}, `
             distinguishedname, samaccountname,ObjectClass,$hash_enabled, `
-            $hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
-            $hash_PasswordNeverExpires,$hash_KerberosEncryptionType,$hash_vsh}catch{}
+            $hash_pwdLastSet,$hash_PwdAgeinDays,$hash_lastLogonTimestamp,$hash_AccountNotDelegated,$hash_protected, `
+            $hash_PasswordNeverExpires,$hash_EncryptionType,$hash_vsh}catch{}
         }
      }
 }
@@ -199,6 +201,7 @@ function collectPrivilegedUsers{
     $results | sort domain, group, grouprelatedto,addedtogroup
 }
 
+$critical_groups = @("Administrators","Domain Admins","Enterprise Admins")
 
 #region hash calculated properties
     #creating hash tables for each calculated property
@@ -218,6 +221,13 @@ function collectPrivilegedUsers{
         Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
     $hash_PwdAgeinDays = @{Name="PwdAgeinDays";
         Expression={if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{0}}}
+    $hash_EncryptionType = @{name='EncryptionType';
+            expression={if($_.useraccountcontrol -band 2097152){"DES"}
+                else{if($_."msds-supportedencryptiontypes" -band 16){"AES256-HMAC"}
+                elseif($_."msds-supportedencryptiontypes" -band 8){"AES128-HMAC"}
+                else{"RC4-HMAC"}}}}
+    $hash_critical = @{Name="Critical";
+        Expression={if(($critical_groups -contains $Group) -or($critical_groups -contains $from)){$true}}}
 #endregion
 
 #collectADPrivilegedGroupChanges | out-gridview
@@ -227,7 +237,8 @@ $protected_users_groups = foreach($domain in (get-adforest).domains){get-adgroup
 
 $results = collectPrivilegedUsers
 $results | out-gridview
-$results | export-csv $default_log -NoTypeInformation
+$results | where critical -eq $true | export-csv $default_critical_log -NoTypeInformation
+$results | where critical -ne $true | export-csv $default_log -NoTypeInformation
 cls
 $results | select domain -Unique | foreach{
     $filter_domain = $_.domain; $filter_domain | Out-Host

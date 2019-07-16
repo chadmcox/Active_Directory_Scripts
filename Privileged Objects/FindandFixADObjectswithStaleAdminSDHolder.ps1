@@ -73,7 +73,6 @@ Function ADObjectswithStaleAdminCount{
     param()
     process{
         write-host "Starting Function ADObjectswithStaleAdminCount"
-        write-host "Starting Function ADObjectswithStaleAdminCount"
         
         #users with stale admin count
         $results = @();$orphan_results = @();$non_orphan_results  = @()

@@ -1,0 +1,72 @@
+#requires -version 4.0
+#requires -modules activedirectory
+<#PSScriptInfo
+
+.VERSION 2020.4.8
+
+.GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
+
+.AUTHOR Chad.Cox@microsoft.com
+    https://blogs.technet.microsoft.com/chadcox/ (retired)
+    https://github.com/chadmcox
+
+.COMPANYNAME 
+
+.COPYRIGHT This Sample Code is provided for the purpose of illustration only and is not
+intended to be used in a production environment.  THIS SAMPLE CODE AND ANY
+RELATED INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND/OR FITNESS FOR A PARTICULAR PURPOSE.  We grant You a
+nonexclusive, royalty-free right to use and modify the Sample Code and to
+reproduce and distribute the object code form of the Sample Code, provided
+that You agree: (i) to not use Our name, logo, or trademarks to market Your
+software product in which the Sample Code is embedded; (ii) to include a valid
+copyright notice on Your software product in which the Sample Code is embedded;
+and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
+against any claims or lawsuits, including attorneys` fees, that arise or result
+from the use or distribution of the Sample Code..
+
+.DESCRIPTION
+    This script will disable computer objects that have pwdlastset greater than daysinactive
+    and lastlogontimestamp greater than daysinactive
+    and not a clustert object
+    and is enabled
+    and not a critical system object like a domain controller
+    and is a windows machine.
+
+    !!!! Remove -whatif after the disable-adaccount cmdlet for to actually disable the account !!!!!!!
+
+.EXAMPLE
+    .\disable_stale_windows_computers.ps1
+
+.EXAMPLE
+    .\disable_stale_windows_computers.ps1 -DaysInactive 180 -domain "contoso.com" -logpath "c:\temp"
+
+
+#> 
+Param($DaysInactive=90,
+    $domain="$((get-addomain).dnsroot)",
+    $logpath = $(Split-Path -parent $PSCommandPath))
+
+$log = "$path\$(($domain.Split("."))[0])_disable_stale_windows_computers.log"
+
+#this takes the daysinactive and subtracts it from today's date. 
+#Then converts in format used by pwdlastset and lastlogontimestamp
+$utc_stale_date = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
+
+write-host "Searching $domain"
+
+$stale_computers = get-adcomputer -filter {(LastLogonTimeStamp -lt $utc_stale_date -or LastLogonTimeStamp -notlike "*")
+    -and (pwdlastset -lt $utc_stale_date -or pwdlastset -eq 0) -and (enabled -eq $true)
+    -and (iscriticalsystemobject -notlike $true) -and (OperatingSystem -like 'Windows*')
+    -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
+    -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset #| where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
+write-host "In $domain Found $($stale_computers.count) Stale Computers"
+#Disable Stale Computer Accounts
+$stale_computers | foreach {
+    write-host "Searching $domain"
+    "$(Get-Date -Format o) - Disabling $(($_).samaccountname), pwdlastset = $([datetime]::FromFileTime($_.pwdLastSet)), lastlogontimestamp = $([datetime]::FromFileTime($_.LastLogonTimeStamp))" | Add-Content -Path $log
+    try{
+        Disable-ADAccount -Identity $_.samaccountname -server $domain -whatif
+    }catch{"$(Get-Date -Format o) - Error Disabling - $(($_).samaccountname) "}
+}

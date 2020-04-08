@@ -61,7 +61,7 @@ $stale_computers = get-adcomputer -filter {(LastLogonTimeStamp -lt $utc_stale_da
     -and (pwdlastset -lt $utc_stale_date -or pwdlastset -eq 0) -and (enabled -eq $true)
     -and (iscriticalsystemobject -notlike $true) -and (OperatingSystem -like 'Windows*')
     -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
-    -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset #| where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
+    -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset | where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
 
 write-host "In $domain found $($stale_computers.count) stale computers"
 #Disable Stale Computer Accounts

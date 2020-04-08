@@ -34,7 +34,7 @@ from the use or distribution of the Sample Code..
     and not a critical system object like a domain controller
     and is a windows machine.
 
-    !!!! Remove -whatif after the disable-adaccount cmdlet for to actually disable the account !!!!!!!
+    !!!! Test first, Remove -whatif after the disable-adaccount cmdlet for to actually disable the account !!!!!!!
 
 .EXAMPLE
     .\disable_stale_windows_computers.ps1
@@ -56,17 +56,20 @@ $utc_stale_date = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
 
 write-host "Searching $domain"
 
+#get list of stale computers, store in variable
 $stale_computers = get-adcomputer -filter {(LastLogonTimeStamp -lt $utc_stale_date -or LastLogonTimeStamp -notlike "*")
     -and (pwdlastset -lt $utc_stale_date -or pwdlastset -eq 0) -and (enabled -eq $true)
     -and (iscriticalsystemobject -notlike $true) -and (OperatingSystem -like 'Windows*')
     -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
     -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset #| where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
-write-host "In $domain Found $($stale_computers.count) Stale Computers"
+
+write-host "In $domain found $($stale_computers.count) stale computers"
 #Disable Stale Computer Accounts
 $stale_computers | foreach {
     write-host "Searching $domain"
     "$(Get-Date -Format o) - Disabling $(($_).samaccountname), pwdlastset = $([datetime]::FromFileTime($_.pwdLastSet)), lastlogontimestamp = $([datetime]::FromFileTime($_.LastLogonTimeStamp))" | Add-Content -Path $log
     try{
+        #!!!!!!! reminder to remove -whatif!!!!!!!
         Disable-ADAccount -Identity $_.samaccountname -server $domain -whatif
     }catch{"$(Get-Date -Format o) - Error Disabling - $(($_).samaccountname) "}
 }

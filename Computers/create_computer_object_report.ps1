@@ -2,7 +2,7 @@
 #requires -modules activedirectory
 <#PSScriptInfo
 
-.VERSION 2020.4.8
+.VERSION 2020.4.16.1
 
 .GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
 
@@ -61,16 +61,20 @@ Param($DaysInactive=90,$logpath = $(Split-Path -parent $PSCommandPath))
 
 $utc_stale_date = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
 $log_file_date = $(get-date -Format yyyyMMddHHmm)
-"$(Get-Date -Format o) - Gathering Every Computer Objects from forest" | add-content -Path "$logpath\run.log"
+"$(Get-Date -Format o) - exporting out all OU's" | add-content -Path "$logpath\run.log"
 
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
-    "$(Get-Date -Format o) - Gathering Computer Objects from $domain" | add-content -Path "$logpath\run.log"
     get-ADOrganizationalUnit -filter * -properties "msds-approx-immed-subordinates" -server $domain -PipelineVariable ou | `
-            where {$_."msds-approx-immed-subordinates" -ne 0} | foreach {
+            where {$_."msds-approx-immed-subordinates" -ne 0} | select @{N="Domain";E={$domain}},DistinguishedName}  | `
+                export-csv -Path "$logpath\tOUlist.csv" -NoTypeInformation
+
+"$(Get-Date -Format o) - Gathering all computers" | add-content -Path "$logpath\run.log"
+import-csv "$logpath\tOUlist.csv" -pv ou | foreach {
+    "$(Get-Date -Format o) - Gathering Stale Computer Objects from $($ou.domain)" | add-content -Path "$logpath\run.log"
     get-adcomputer -filter {(iscriticalsystemobject -notlike $true)} -searchbase $ou.DistinguishedName -SearchScope OneLevel `
-        -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset,dnshostname, OperatingSystem, enabled,whencreated, `
+        -server $ou.domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset,dnshostname, OperatingSystem, enabled,whencreated, `
             primaryGroupID,PasswordNotRequired,managedBy,admincount,Trustedfordelegation,sidHistory,usercertificate,TrustedToAuthForDelegation, `
-            UseDESKeyOnly,userAccountControl | select @{N="Domain";E={$domain}}, samaccountname, name, dnshostname, operatingsystem, enabled, `
+            UseDESKeyOnly,userAccountControl | select @{N="Domain";E={$ou.domain}}, samaccountname, name, dnshostname, operatingsystem, enabled, `
             @{N="PwdAgeinDays";E={if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{0}}}, `
             @{N="pwdLastSet";E={if(!($_.pwdlastset -eq 0)){([datetime]::FromFileTime($_.pwdLastSet))}}}, `
             @{N="LastLogonTimeStamp";E={if($_.LastLogonTimeStamp){([datetime]::FromFileTime($_.LastLogonTimeStamp))}}}, `
@@ -78,7 +82,7 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach {
             whencreated,Ipv4Address, Ipv6Address, primaryGroupID,PasswordNotRequired,admincount,Trustedfordelegation,TrustedToAuthForDelegation, `
             UseDESKeyOnly,userAccountControl, @{Name="userCertificateCount";Expression={$_.usercertificate.count}}, `
             @{n='ParentOU';e={$ou.DistinguishedName}},managedBy,sid
-}} | export-csv -Path "$logpath\active_directory_computer_export_$log_file_date.csv" -NoTypeInformation
+} | export-csv -Path "$logpath\active_directory_computer_export_$log_file_date.csv" -NoTypeInformation
 
 "$(Get-Date -Format o) - Gathering Stale Computer Objects from forest" | add-content -Path "$logpath\run.log"
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
@@ -109,3 +113,4 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach {
 } | export-csv -Path "$logpath\active_directory_computer_disabled_export_$log_file_date.csv" -NoTypeInformation
 
 "$(Get-Date -Format o) - Complete" | add-content -Path "$logpath\run.log"
+

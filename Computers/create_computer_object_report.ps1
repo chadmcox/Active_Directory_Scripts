@@ -2,7 +2,7 @@
 #requires -modules activedirectory
 <#PSScriptInfo
 
-.VERSION 2020.4.17
+.VERSION 2020.4.17.1
 
 .GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
 
@@ -59,16 +59,22 @@ from the use or distribution of the Sample Code..
 #> 
 Param($DaysInactive=90,$logpath = $(Split-Path -parent $PSCommandPath))
 
+if(!($logpath)){
+    #just in case pscommandpath is empty
+    $logpath = "$($env:USERPROFILE)\Documents"
+}
+
 $utc_stale_date = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
 $log_file_date = $(get-date -Format yyyyMMddHHmm)
-"$(Get-Date -Format o) - exporting out all OU's" | add-content -Path "$logpath\run.log"
+
+"$(Get-Date -Format o) - cleaning up files" | add-content -Path "$logpath\run.log"
 #remove all but previous results
 get-childitem "$logpath\active_directory_computer*.csv" | sort lastwritetime -Descending | select -Skip 3 | Remove-Item -Force
 #remove all but last 6 zip files
 get-childitem "$logpath\active_directory_computer*.zip" | sort lastwritetime -Descending | select -Skip 6 | Remove-Item -Force
 #remove log file if bigger than 5mb
 Get-ChildItem "$logpath\run.log" | Where { $_.Length / 1MB -gt 5 } | Remove-Item -Force
-
+"$(Get-Date -Format o) - exporting out all OU's" | add-content -Path "$logpath\run.log"
 #retrieve all containers and OU that contain objects in AD to query for computer objects.
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
     Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=container))" -Properties "msds-approx-immed-subordinates" `
@@ -82,14 +88,14 @@ import-csv "$logpath\tOUlist.csv" -pv ou | foreach {
     get-adcomputer -filter {(iscriticalsystemobject -notlike $true)} -searchbase $ou.DistinguishedName -SearchScope OneLevel `
         -server $ou.domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset,dnshostname, OperatingSystem, enabled,whencreated, `
             primaryGroupID,PasswordNotRequired,managedBy,admincount,Trustedfordelegation,sidHistory,usercertificate,TrustedToAuthForDelegation, `
-            UseDESKeyOnly,userAccountControl | select @{N="Domain";E={$ou.domain}}, samaccountname, name, dnshostname, operatingsystem, enabled, `
+            UseDESKeyOnly,userAccountControl, description | select @{N="Domain";E={$ou.domain}}, samaccountname, name, dnshostname, operatingsystem, enabled, `
             @{N="PwdAgeinDays";E={if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{0}}}, `
             @{N="pwdLastSet";E={if(!($_.pwdlastset -eq 0)){([datetime]::FromFileTime($_.pwdLastSet))}}}, `
             @{N="LastLogonTimeStamp";E={if($_.LastLogonTimeStamp){([datetime]::FromFileTime($_.LastLogonTimeStamp))}}}, `
             @{N="sidHistory";E={[string]$($_.sidhistory)}}, `
             whencreated,Ipv4Address, Ipv6Address, primaryGroupID,PasswordNotRequired,admincount,Trustedfordelegation,TrustedToAuthForDelegation, `
             UseDESKeyOnly,userAccountControl, @{Name="userCertificateCount";Expression={$_.usercertificate.count}}, `
-            @{n='ParentOU';e={$ou.DistinguishedName}},managedBy,sid
+            sid,@{n='Description';e={$(($_).description -replace '[^a-zA-Z0-9\s]', '')}},@{n='ParentOU';e={$ou.DistinguishedName}},managedBy
 } | export-csv -Path "$logpath\active_directory_computer_export_$log_file_date.csv" -NoTypeInformation
 
 #create a stale computer report
@@ -122,10 +128,28 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach {
             @{n='ParentOU';e={$($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}},managedBy
 } | export-csv -Path "$logpath\active_directory_computer_disabled_export_$log_file_date.csv" -NoTypeInformation
 
-"$(Get-Date -Format o) - Complete" | add-content -Path "$logpath\run.log"
 
+"$(Get-Date -Format o) - Create Summary" | add-content -Path "$logpath\run.log"
+#create a computer summary file
+$computers = import-csv "$logpath\active_directory_computer_export_$log_file_date.csv" 
+"Total Computers $($computers.count)" | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt"
+"Operating Systems ---------------------------"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+$computers | group operatingsystem | select name, count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Count in Each Domain ------------------------"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+$computers | group domain | select name, count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Computers Enabled/Disabled-------------------"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+$computers | group Enabled | select name, count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Computers with unconstrain delegation--------"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+$computers | group Trustedfordelegation | select name, count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Computers with duplicate Sids----------------"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+$computers | group sid | where count -ge 2 | select name, count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Computers with Password older than 365 Days--"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+($computers | where PwdAgeinDays -ge 365 | measure-object).count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"Computers with Non Standard Primary Group (515)--"  | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+($computers | where primaryGroupID -ne 515 | measure-object).count | out-file "$logpath\active_directory_computer_summary_$log_file_date.txt" -append
+"$(Get-Date -Format o) - compressing files" | add-content -Path "$logpath\run.log"
 #compress results into zip file to share
-$compress_file = "$logpath\Active Directory_Computer_Extract_$(get-date -Format yyyyMMddHHmm).zip"
+$compress_file = "$logpath\Active Directory_Computer_Extract_$log_file_date.zip"
 Compress-Archive -Path "$logpath\active_directory_computer*.csv","$logpath\run.log" -CompressionLevel Fastest -DestinationPath $compress_file
 
-
+"$(Get-Date -Format o) - Complete" | add-content -Path "$logpath\run.log"

@@ -2,7 +2,7 @@
 #requires -modules activedirectory
 <#PSScriptInfo
 
-.VERSION 2020.4.8
+.VERSION 2020.4.17
 
 .GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
 
@@ -34,21 +34,47 @@ from the use or distribution of the Sample Code..
     and not a critical system object like a domain controller
     and is a windows machine.
 
-    !!!! Test first, Remove -whatif after the disable-adaccount cmdlet for to actually disable the account !!!!!!!
+    !!!! Test first, Remove -whatif after the set-adcomputer,move-adobject,disable-adaccount cmdlet for to actually disable the account !!!!!!!
+
+    There are two options the script can just disable a computer in the existing ou, or if you want it to move first then disable use the
+    movefirst switch and destination parameter and provide a destination ou dn
+
+    exception list is available to put in computer names that need to be excluded for whatever reason.
 
 .EXAMPLE
+    disable stale computers in current domain
     .\disable_stale_windows_computers.ps1
 
 .EXAMPLE
+    disable stale computers in a different domain, that are inactive for 180 days instead of 90
     .\disable_stale_windows_computers.ps1 -DaysInactive 180 -domain "contoso.com" -logpath "c:\temp"
 
+.EXAMPLE
+    Move the computer object to a new OU, then disable
+    .\disable_stale_windows_computers.ps1 -DaysInactive 180 -domain "contoso.com" -movefirst -destination "OU=Stale Computers,DC=contoso,DC=com"
+
+.EXAMPLE
+    disable stale computers in a different domain, provide a different list of exclusions
+    .\disable_stale_windows_computers.ps1 -DaysInactive 180 -domain "contoso.com" -exclusionlist "c:\contoso_exclusions.txt"
 
 #> 
 Param($DaysInactive=90,
     $domain="$((get-addomain).dnsroot)",
-    $logpath = $(Split-Path -parent $PSCommandPath))
+    $logpath = $(Split-Path -parent $PSCommandPath),[switch]$movefirst,$destination,$exclusionlist=".\excludecomputers.txt")
 
-$log = "$path\$(($domain.Split("."))[0])_disable_stale_windows_computers.log"
+if(!($logpath)){
+    #just in case pscommandpath is empty
+    $logpath = "$($env:USERPROFILE)\Documents"
+}
+cd $logpath
+$log = "$logpath\$(($domain.Split("."))[0])_disable_stale_windows_computers.log"
+Get-ChildItem $log | Where { $_.Length / 1MB -gt 5 } | Remove-Item -Force
+if(!(test-path $exclusionlist)){
+    #if demo file doesnt exist create one
+    "server1" | add-content $exclusionlist
+}
+
+$exclusions = get-content $exclusionlist
 
 #this takes the daysinactive and subtracts it from today's date. 
 #Then converts in format used by pwdlastset and lastlogontimestamp
@@ -61,14 +87,30 @@ $stale_computers = get-adcomputer -filter {(LastLogonTimeStamp -lt $utc_stale_da
     -and (pwdlastset -lt $utc_stale_date -or pwdlastset -eq 0) -and (enabled -eq $true)
     -and (iscriticalsystemobject -notlike $true) -and (OperatingSystem -like 'Windows*')
     -and ((ServicePrincipalName -notlike "*") -or (ServicePrincipalName -notlike "*MSClusterVirtualServer*"))} `
-    -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset | where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
+    -server $domain -properties ipv4address, ipv6address, LastLogonTimeStamp, pwdlastset,CanonicalName | where {$_.IPv4Address -eq $null -and $_.IPv6Address -eq $null}
 
 write-host "In $domain found $($stale_computers.count) stale computers"
-#Disable Stale Computer Accounts
-$stale_computers | foreach {
+
+#Check to see if the movefirst switch is used and a valid ou to move computer to is found
+#will add the date and original CanonicalName into the postaladdress to provide location of where the computer came from.
+if(($movefirst -eq $true) -and (get-adobject $destination -server $domain)){
+    $stale_computers | where {!($_.name -in $exclusions)} | foreach{
+        "$(Get-Date -Format o) - Moving $(($_).samaccountname)" | Add-Content -Path $log
+        try{$_ | set-adcomputer -add @{postaladdress="Moved: $(Get-Date -Format o) - Original OU: $($_.CanonicalName)"} -Server $domain -whatif
+        $_ | Move-ADObject  -TargetPath $destination -server $domain -whatif
+        }catch{"$(Get-Date -Format o) - Error Disabling - $(($_).samaccountname) "}
+    }
+}elseif($movefirst -eq $true){
+    write-host "Valid OU not provided for destination.  Make sure in DN format"
+    exit
+}
+
+#Disable Stale Computer Accounts, add a disable date to the postaladdress
+$stale_computers | where {!($_.name -in $exclusions)} | foreach {
     write-host "Searching $domain"
     "$(Get-Date -Format o) - Disabling $(($_).samaccountname), pwdlastset = $([datetime]::FromFileTime($_.pwdLastSet)), lastlogontimestamp = $([datetime]::FromFileTime($_.LastLogonTimeStamp))" | Add-Content -Path $log
     try{
+        $_ | set-adcomputer -add @{postaladdress="Disabled: $(Get-Date -Format o)"} -Server $domain -whatif
         #!!!!!!! reminder to remove -whatif!!!!!!!
         Disable-ADAccount -Identity $_.samaccountname -server $domain -whatif
     }catch{"$(Get-Date -Format o) - Error Disabling - $(($_).samaccountname) "}

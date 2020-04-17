@@ -2,7 +2,7 @@
 #requires -modules activedirectory
 <#PSScriptInfo
 
-.VERSION 2020.4.16.1
+.VERSION 2020.4.17
 
 .GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
 
@@ -62,12 +62,20 @@ Param($DaysInactive=90,$logpath = $(Split-Path -parent $PSCommandPath))
 $utc_stale_date = ([DateTime]::Today.AddDays(-$DaysInactive)).ToFileTimeUTC()
 $log_file_date = $(get-date -Format yyyyMMddHHmm)
 "$(Get-Date -Format o) - exporting out all OU's" | add-content -Path "$logpath\run.log"
+#remove all but previous results
+get-childitem "$logpath\active_directory_computer*.csv" | sort lastwritetime -Descending | select -Skip 3 | Remove-Item -Force
+#remove all but last 6 zip files
+get-childitem "$logpath\active_directory_computer*.zip" | sort lastwritetime -Descending | select -Skip 6 | Remove-Item -Force
+#remove log file if bigger than 5mb
+Get-ChildItem "$logpath\run.log" | Where { $_.Length / 1MB -gt 5 } | Remove-Item -Force
 
+#retrieve all containers and OU that contain objects in AD to query for computer objects.
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
-    get-ADOrganizationalUnit -filter * -properties "msds-approx-immed-subordinates" -server $domain -PipelineVariable ou | `
-            where {$_."msds-approx-immed-subordinates" -ne 0} | select @{N="Domain";E={$domain}},DistinguishedName}  | `
-                export-csv -Path "$logpath\tOUlist.csv" -NoTypeInformation
+    Get-ADObject -ldapFilter "(|(objectclass=organizationalunit)(objectclass=container))" -Properties "msds-approx-immed-subordinates" `
+        -server $domain -PipelineVariable ou | where {$_."msds-approx-immed-subordinates" -ne 0} | `
+            select @{N="Domain";E={$domain}},DistinguishedName}  | export-csv -Path "$logpath\tOUlist.csv" -NoTypeInformation
 
+#Using previous list retrieve all enabled computers objects and specific information
 "$(Get-Date -Format o) - Gathering all computers" | add-content -Path "$logpath\run.log"
 import-csv "$logpath\tOUlist.csv" -pv ou | foreach {
     "$(Get-Date -Format o) - Gathering Stale Computer Objects from $($ou.domain)" | add-content -Path "$logpath\run.log"
@@ -84,6 +92,7 @@ import-csv "$logpath\tOUlist.csv" -pv ou | foreach {
             @{n='ParentOU';e={$ou.DistinguishedName}},managedBy,sid
 } | export-csv -Path "$logpath\active_directory_computer_export_$log_file_date.csv" -NoTypeInformation
 
+#create a stale computer report
 "$(Get-Date -Format o) - Gathering Stale Computer Objects from forest" | add-content -Path "$logpath\run.log"
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
     "$(Get-Date -Format o) - Gathering Stale Computer Objects from $domain" | add-content -Path "$logpath\run.log"
@@ -100,6 +109,7 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach {
             @{n='ParentOU';e={$($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}},managedBy
 } | export-csv -Path "$logpath\active_directory_computer_stale_export_$log_file_date.csv" -NoTypeInformation
 
+#create a list of all disabled computers.
 "$(Get-Date -Format o) - Gathering Disabled Computer Objects from forest" | add-content -Path "$logpath\run.log"
 get-adforest | select -ExpandProperty domains -pv domain | foreach {
     "$(Get-Date -Format o) - Gathering Disabled Computer Objects from $domain" | add-content -Path "$logpath\run.log"
@@ -113,4 +123,9 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach {
 } | export-csv -Path "$logpath\active_directory_computer_disabled_export_$log_file_date.csv" -NoTypeInformation
 
 "$(Get-Date -Format o) - Complete" | add-content -Path "$logpath\run.log"
+
+#compress results into zip file to share
+$compress_file = "$logpath\Active Directory_Computer_Extract_$(get-date -Format yyyyMMddHHmm).zip"
+Compress-Archive -Path "$logpath\active_directory_computer*.csv","$logpath\run.log" -CompressionLevel Fastest -DestinationPath $compress_file
+
 

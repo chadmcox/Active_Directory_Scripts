@@ -31,15 +31,12 @@ get-adforest | select -ExpandProperty domains -pv domain | foreach{
 Write-Host "Creating Hash Table for lookup"
 $hash_group_membership = import-csv .\gpmem.tmp | group child -AsHashTable -AsString
 
-remove-item .\expanded_membership.csv -force -ErrorAction SilentlyContinue
+remove-item .\expandedmembership.csv -force -ErrorAction SilentlyContinue
 
 foreach($object in ($hash_group_membership).keys){
     write-host "Enumerating: $object"
     $script:alreadyexplored = @{}
-    expandgpmem -dn $object | export-csv .\expanded_membership.csv -Append -NoTypeInformation
+    expandgpmem -dn $object | export-csv .\expandedmembership.csv -Append -NoTypeInformation
 }
 
-import-csv .\expanded_membership.csv | group object | select name, count | export-csv ".\adObjectMemberofCount.csv" -NoTypeInformation
-
-
-
+import-csv .\expandedmembership.csv | group object | select name, count | export-csv ".\adObjectMemberofCount.csv" -NoTypeInformation

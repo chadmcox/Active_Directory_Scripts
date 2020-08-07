@@ -39,12 +39,12 @@ foreach($object in ($hash_group_membership).keys){
     expandgpmem -dn $object | export-csv .\expanded_membership.csv -Append -NoTypeInformation
 }
 
-import-csv .\expanded_membership.csv | group child | select name, count | export-csv ".\adObjectMemberofCount.csv"
+import-csv .\expanded_membership.csv | group object | select name, count | export-csv ".\adObjectMemberofCount.csv"
 
 
 
 write-host "Objects with over 500 Groups" -ForegroundColor red
-export-csv ".\adObjectMemberofCount.csv" | where count -gt 500
+import-csv ".\adObjectMemberofCount.csv" | where count -gt 500
 
 write-host "Objects with over 250 Groups" -ForegroundColor Yellow
-export-csv ".\adObjectMemberofCount.csv" | where count -gt 250
+import-csv ".\adObjectMemberofCount.csv" | where count -gt 250

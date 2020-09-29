@@ -37,9 +37,9 @@ set-variable -name "user" -value $(read-host "SamAccount Name?")
     @{name='User';expression={$_.samaccountname}}, `
     @{name='User State';expression={$_.lockedout}}, `
     @{name='Bad Pwd Count';expression={$_.badPwdCount}}, `
-    @{name='Last Bad Pwd';expression={([datetime]::FromFileTime($_.badPasswordTime)).ToString('MM/dd/yyyy')}}, `
-    @{Name="Pwd Last Sets";Expression={([datetime]::FromFileTime($_.PwdLastSet)).ToString('MM/dd/yyyy')}}, `
+    @{name='Last Bad Pwd';expression={([datetime]::FromFileTime($_.badPasswordTime)).ToString('u')}}, `
+    @{Name="Pwd Last Sets";Expression={([datetime]::FromFileTime($_.PwdLastSet)).ToString('u')}}, `
     @{Name="Pwd Age in Days";Expression={if($_.PwdLastSet -ne 0){(new-TimeSpan([datetime]::FromFileTimeUTC($_.PwdLastSet)) $(Get-Date)).days}else{"NA"}}}, `
-    @{Name="Last Logon";Expression={([datetime]::FromFileTime($_.LastLogonTimeStamp)).ToString('MM/dd/yyyy')}}}catch{}}} | Out-GridView -title "LockoutStatus"
+    @{Name="Last Logon";Expression={([datetime]::FromFileTime($_.LastLogonTimeStamp)).ToString('u')}}}catch{}}} | Out-GridView -title "LockoutStatus"
 
 

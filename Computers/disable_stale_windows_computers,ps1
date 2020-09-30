@@ -110,7 +110,7 @@ $stale_computers | where {!($_.name -in $exclusions)} | foreach {
     write-host "Searching $domain"
     "$(Get-Date -Format o) - Disabling $(($_).samaccountname), pwdlastset = $([datetime]::FromFileTime($_.pwdLastSet)), lastlogontimestamp = $([datetime]::FromFileTime($_.LastLogonTimeStamp))" | Add-Content -Path $log
     try{
-        $_ | set-adcomputer -add @{postaladdress="Disabled: $(Get-Date -Format o)"} -Server $domain -whatif
+        get-adcomputer $_.name -server $domain | set-adcomputer -add @{postaladdress="Disabled: $(Get-Date -Format o)"} -Server $domain -whatif
         #!!!!!!! reminder to remove -whatif!!!!!!!
         Disable-ADAccount -Identity $_.samaccountname -server $domain -whatif
     }catch{"$(Get-Date -Format o) - Error Disabling - $(($_).samaccountname) "}

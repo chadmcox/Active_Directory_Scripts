@@ -1,10 +1,11 @@
 $path = "$env:userprofile\Documents\domain_acls.csv"
 $schemaIDGUID = @{}
 Get-ADObject -SearchBase (Get-ADRootDSE).schemaNamingContext -LDAPFilter '(schemaIDGUID=*)' -Properties name, schemaIDGUID |
-    ForEach-Object {$schemaIDGUID.add([System.GUID]$_.schemaIDGUID,$_.name)}
+    ForEach-Object {try{$schemaIDGUID.add([System.GUID]$_.schemaIDGUID,$_.name)}catch{}}
 Get-ADObject -SearchBase "CN=Extended-Rights,$((Get-ADRootDSE).configurationNamingContext)" -LDAPFilter '(objectClass=controlAccessRight)' -Properties name, rightsGUID |
-    ForEach-Object {$schemaIDGUID.add([System.GUID]$_.rightsGUID,$_.name)}
-Foreach($domain in (get-adforest).domains){
+    ForEach-Object {try{$schemaIDGUID.add([System.GUID]$_.rightsGUID,$_.name)}catch{}}
+
+get-adforest | select -expandproperty domains -pv domain | foreach{
     try{get-PSDrive -Name ADROOT -ErrorAction SilentlyContinue | Remove-PSDrive -force}catch{}
     $ps_drive = New-PSDrive -Name ADROOT -PSProvider ActiveDirectory -Server $domain -Scope Global -root "//RootDSE/"
     $rootdn = "ADROOT:\" + ($domain | get-addomain).DistinguishedName

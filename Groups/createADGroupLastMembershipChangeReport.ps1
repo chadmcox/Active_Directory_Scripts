@@ -1,7 +1,7 @@
 #Requires -Modules activedirectory
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 2020.11.18
 
 .GUID 4b43aafd-97d0-44e4-95e6-d2b129c5b449
 
@@ -35,18 +35,21 @@ from the use or distribution of the Sample Code..
 #> 
 Param($reportpath = "$env:userprofile\Documents")
 
-
-function CollectADGroupwithMemLastChange{
+function retrieveADGroups{
     $GroupProperties = @("samaccountname","DisplayName","groupscope","groupcategory","admincount","iscriticalsystemobject", `
                         "whencreated","mail","msDS-ReplValueMetaData","objectSid","ProtectedFromAccidentalDeletion", `
                         "distinguishedname")
     $Select_properties = $GroupProperties + $hash_domain
     $results = @()
     foreach($domain in (get-adforest).domains){
-        $results += get-adgroup -LDAPFilter "(&(member=*)(!(IsCriticalSystemObject=TRUE))(groupType:1.2.840.113556.1.4.803:=2147483648))" `
+        get-adgroup -LDAPFilter "(&(member=*)(!(IsCriticalSystemObject=TRUE))(groupType:1.2.840.113556.1.4.803:=2147483648))" `
             -Properties $GroupProperties  `
             -Server $domain -ResultPageSize 500 -ResultSetSize $null | Select $Select_properties
     }
+}
+
+function CollectADGroupwithMemLastChange{
+    $results = retrieveADGroups
     $results | select domain,samaccountname,displayname,groupscope,groupcategory,mail,admincount, `
         $hash_rid,$hash_whencreated,$hash_memlastchange,ProtectedFromAccidentalDeletion,$hash_parentou | `
             where {$_.Rid -gt 1000 -and $_.parentou -notlike "*CN=Users,DC=*" -and $_.parentou `

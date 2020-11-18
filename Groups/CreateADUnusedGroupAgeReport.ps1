@@ -1,10 +1,9 @@
 
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 2020.11.18
 
 .GUID 8cc222be-d143-4b38-a8c0-ba25df4e1db1
-
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
     https://github.com/chadmcox
@@ -76,8 +75,9 @@ $hash_whencreated = @{Name="whencreated";
     Expression={($_.whencreated).ToString('MM/dd/yyyy')}}
 #endregion
 
-foreach($domain in (get-adforest).domains){
-    $groups += get-adgroup -LDAPFilter "(&(!(member=*))(!(memberof=*)))" `
+function retrieveADGroups{
+    foreach($domain in (get-adforest).domains){
+    get-adgroup -LDAPFilter "(&(!(member=*))(!(memberof=*)))" `
             -Properties "msDS-ReplValueMetaData",whencreated,groupscope,groupcategory, `
                 objectSid,description,managedby -server $domain | `
         where {(!($_."msDS-ReplValueMetaData"))} | `
@@ -85,7 +85,10 @@ foreach($domain in (get-adforest).domains){
             $hash_ageindays,isCriticalSystemObject,$hash_rid,$hash_parentou,description,managedby | `
             where {$_.Rid -gt 1000 -and $_.parentou -notlike "*CN=Users,DC=*" -and $_.parentou `
             -notlike "*OU=Microsoft Exchange Security Groups,DC=*"} 
+    }
 }
+
+$groups = retrieveADGroups
 
 $groups | export-csv $default_log -NoTypeInformation
 

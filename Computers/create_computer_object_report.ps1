@@ -57,7 +57,7 @@ from the use or distribution of the Sample Code..
 
 
 #> 
-Param($DaysInactive=90,$logpath = $(Split-Path -parent $PSCommandPath))
+Param($DaysInactive=90,$logpath = "$($env:USERPROFILE)\Documents")
 
 if(!($logpath)){
     #just in case pscommandpath is empty

@@ -2,7 +2,7 @@
 #requires -modules activedirectory
 <#PSScriptInfo
 
-.VERSION 2020.4.17.1
+.VERSION 2021.1.7
 
 .GUID 30793b69-d59f-41e4-a274-13d6b3fc0795
 

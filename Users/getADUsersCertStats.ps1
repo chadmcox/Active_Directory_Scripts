@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.1
+.VERSION 2021.1.8
 
 .GUID 8235cbe1-3f8b-443e-a46b-8c10145dae84
 
@@ -64,33 +64,28 @@ function ADUserswithCertificates{
     write-host "Counting AD Users Certificates."
     $results = @()
     foreach($domain in (get-adforest).domains){ 
-        try{$results += get-aduser -LDAPFilter "(|(usercertificate=*)(userSMIMECertificate=*))"`
+        get-aduser -LDAPFilter "(|(usercertificate=*)(userSMIMECertificate=*))"`
                  -Properties enabled,PasswordExpired,pwdLastSet,lastlogontimestamp,usercertificate,userSMIMECertificate,whencreated,whenchanged `
                   -server $domain | `
-                    select $hash_domain, *}
-        catch{}
+                    select $hash_domain, *
     }
-       
-    $results | select domain,samaccountname,$hash_usercertificatecount,$hash_usersmimecount,enabled, `
-        passwordexpired,$hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_whenchanged,$hash_whencreated
 }
 
 Function ADUserswithExpiredCertificates{
     write-host "Looking for Expired Certificates."
     $users = @()
     $results = @()
-    foreach($domain in (get-adforest).domains){ 
-        try{$users += get-aduser -LDAPFilter "(|(usercertificate=*)(userSMIMECertificate=*))"`
+    $users = @(foreach($domain in (get-adforest).domains){ 
+        get-aduser -LDAPFilter "(|(usercertificate=*)(userSMIMECertificate=*))"`
                  -Properties usercertificate,userSMIMECertificate `
                  -server $domain | `
-                    select $hash_domain, *}
-        catch{}
-    }
+                    select $hash_domain, *
+    })
 
     foreach($user in $users){
         if(($user).usercertificate){
             ($user).usercertificate | foreach {
-                $results += getcertdate -cert $_ | select `
+                getcertdate -cert $_ | select `
                     @{name='Domain';expression={$user.domain}},`
                     @{name='Samaccountname';expression={$user.samaccountname}},`
                     @{name='Attribute';expression={"usercertificate"}}, `
@@ -99,7 +94,7 @@ Function ADUserswithExpiredCertificates{
         }
         if(($user).userSMIMECertificate){
             ($user).userSMIMECertificate | foreach {
-                $results += getcertdate -cert $_ | select `
+                getcertdate -cert $_ | select `
                     @{name='Domain';expression={$user.domain}},`
                     @{name='Samaccountname';expression={$user.samaccountname}},`
                     @{name='Attribute';expression={"userSMIMECertificate"}}, `
@@ -151,7 +146,7 @@ Function ScanSingleUser{
     $hash_pwdLastSet = @{Name="pwdLastSet";
         Expression={if($_.PwdLastSet -ne 0){([datetime]::FromFileTime($_.pwdLastSet).ToString('MM/dd/yyyy'))}}}
     $hash_lastLogonTimestamp = @{Name="LastLogonTimeStamp";
-        Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
+        Expression={if($_.LastLogonTimeStamp -like "*"){([datetime]::FromFileTime($_.LastLogonTimeStamp).ToString('MM/dd/yyyy'))}}}
     $hash_parentou = @{name='ParentOU';expression={
         $($_.distinguishedname -split '(?<![\\]),')[1..$($($_.distinguishedname -split '(?<![\\]),').Count-1)] -join ','}} 
     $hash_usercertificatecount = @{Name="usercertificateCount";
@@ -165,7 +160,8 @@ if($samaccountname){
         ScanSingleUser -samaccountname $samaccountname -domain $domain
     
 }else{
-    ADUserswithCertificates | export-csv "$reportpath\reportADUserCertStats.csv" -NoTypeInformation
+    ADUserswithCertificates | select domain,samaccountname,$hash_usercertificatecount,$hash_usersmimecount,enabled, `
+        passwordexpired,$hash_pwdLastSet,$hash_lastLogonTimestamp,$hash_whenchanged,$hash_whencreated | export-csv "$reportpath\reportADUserCertStats.csv" -NoTypeInformation
     ADUserswithExpiredCertificates | export-csv "$reportpath\reportADUserExpiredCerts.csv" -NoTypeInformation
     write-host "2 Reports found here: $reportpath"
 }

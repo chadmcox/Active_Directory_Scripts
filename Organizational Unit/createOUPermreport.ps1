@@ -6,7 +6,7 @@ function getOUPerms{
     $hash_inheritance = @{name='InheritanceBroken';expression={$_.nTSecurityDescriptor.AreAccessRulesProtected}}
     foreach($domain in (get-adforest).domains){
         Write-host "Gathering OU's from $domain"
-        Get-ADObject -ldapFilter "(objectclass=organizationalunit)"  -Properties "msds-approx-immed-subordinates",nTSecurityDescriptor | select DistinguishedName -ExpandProperty nTSecurityDescriptor | select distinguishedname -expandproperty access | where IsInherited -eq $false | select DistinguishedName, IdentityReference, AccessControlType, ActiveDirectoryRights
+        Get-ADObject -ldapFilter "(objectclass=organizationalunit)"  -Properties "msds-approx-immed-subordinates",nTSecurityDescriptor -server $domain | select DistinguishedName -ExpandProperty nTSecurityDescriptor | select distinguishedname -expandproperty access | where IsInherited -eq $false | select DistinguishedName, IdentityReference, AccessControlType, ActiveDirectoryRights
     }
 }
 

@@ -21,9 +21,8 @@ from the use or distribution of the Sample Code..
 .description
 this will pull all current domaincontrollers and their IP into an array
 it then list through all the zones and if a srv record doenst exist in the array it 
-passes the object to the remove command
-Leverage this script to report
-https://github.com/chadmcox/Active_Directory_Scripts/blob/master/Domain%20Controller/gatherDCSRVRecords.ps1
+use this script for clean up
+https://github.com/chadmcox/Active_Directory_Scripts/blob/master/Domain%20Controller/removeStaleDCSRVRecords.ps1
 #>
 
 $dc = Get-ADForest | select -ExpandProperty domains -pv domain | foreach{(Get-ADDomainController -filter * -server $domain).hostname | foreach{"$($_)."}}

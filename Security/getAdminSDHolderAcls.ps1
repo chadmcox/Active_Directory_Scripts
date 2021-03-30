@@ -13,7 +13,6 @@ function enumGroup {
 
     }elseif(($identity -split "\\")[0] -eq "BUILTIN"){
         try{get-adgroup -Identity ($identity -split "\\")[1] -Properties members -Server $domain | select -ExpandProperty members | foreach{
-            write-host "$($_)"
             get-adobject -identity $_ -Properties samaccountname -server "$domain`:3268" }}catch{}
     }else{
         try{get-adgroup -Identity ($identity -split "\\")[1] -Properties members -Server ($identity -split "\\")[0]| select -ExpandProperty members | foreach{

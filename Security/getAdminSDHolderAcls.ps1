@@ -1,3 +1,32 @@
+#Requires -Module ActiveDirectory
+#Requires -version 3.0
+#Requires -RunAsAdministrator
+
+<#PSScriptInfo
+.VERSION 2021.3.30
+.GUID 96d7fd43-c37c-4c03-bafa-b282b4572926
+.AUTHOR Chad.Cox@microsoft.com
+    https://blogs.technet.microsoft.com/chadcox/
+    https://github.com/chadmcox
+.COMPANYNAME 
+.COPYRIGHT This Sample Code is provided for the purpose of illustration only and is not
+intended to be used in a production environment.  THIS SAMPLE CODE AND ANY
+RELATED INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND/OR FITNESS FOR A PARTICULAR PURPOSE.  We grant You a
+nonexclusive, royalty-free right to use and modify the Sample Code and to
+reproduce and distribute the object code form of the Sample Code, provided
+that You agree: (i) to not use Our name, logo, or trademarks to market Your
+software product in which the Sample Code is embedded; (ii) to include a valid
+copyright notice on Your software product in which the Sample Code is embedded;
+and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
+against any claims or lawsuits, including attorneys` fees, that arise or result
+from the use or distribution of the Sample Code..
+.RELEASENOTES
+.DESCRIPTION 
+ use this to find out who has ability to change settings, etc on admin creds.
+#> 
+
 param($reportpath = "$env:userprofile\Documents")
 $schemaIDGUID = @{}
 Get-ADObject -SearchBase (Get-ADRootDSE).schemaNamingContext -LDAPFilter '(schemaIDGUID=*)' -Properties name, schemaIDGUID | `
@@ -16,7 +45,6 @@ function enumGroup {
     }else{
         try{get-adgroupmember -Identity ($identity -split "\\")[1] -Recursive -Server ($identity -split "\\")[0]}catch{}
     }
-
 }
 
 function gatherAdminSDHolder {

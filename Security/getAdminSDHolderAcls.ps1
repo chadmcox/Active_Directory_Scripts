@@ -68,4 +68,4 @@ function gatherAdminSDHolder {
     }
 }
 
-gatherAdminSDHolder | export-csv $reportpath\AdminSDHolder_permissions -NoTypeInformation
+gatherAdminSDHolder | export-csv $reportpath\AdminSDHolder_permissions.csv -NoTypeInformation

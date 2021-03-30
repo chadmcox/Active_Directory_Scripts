@@ -20,7 +20,6 @@ function enumGroup {
 }
 
 function gatherAdminSDHolder {
-
     $results = get-adforest | select -ExpandProperty domains -pv domain | foreach {
         $hash_domain = @{name='Domain';expression={$domain}}
         Get-ADObject "CN=AdminSDHolder,$((get-addomain -Server $domain).SystemsContainer)" -Properties "msds-approx-immed-subordinates",nTSecurityDescriptor -server $domain -pv container | `
@@ -31,18 +30,14 @@ function gatherAdminSDHolder {
                 @{name='objectTypeName';expression={if ($_.objectType.ToString() -eq '00000000-0000-0000-0000-000000000000') {'All'} Else {$schemaIDGUID.Item($_.objectType)}}}, `
                 @{name='inheritedObjectTypeName';expression={$schemaIDGUID.Item($_.inheritedObjectType)}}, @{name='memberofGroup';expression={}}
     }}
-
-
     foreach($obj in $results){
         $obj
-
         enumGroup -identity $obj.IdentityReference -domain $obj.domain | select @{name='Domain';expression={$obj.domain}}, `
             @{name='DistinguishedName';expression={$obj.DistinguishedName}}, @{name='IdentityReference';expression={$_.samaccountname}}, `
             @{name='AccessControlType';expression={$obj.AccessControlType}}, @{name='ActiveDirectoryRights';expression={$obj.ActiveDirectoryRights}}, `
             @{name='IsInherited';expression={$obj.IsInherited}}, @{name='objectTypeName';expression={$obj.objectTypeName}}, `
             @{name='inheritedObjectTypeName';expression={$obj.inheritedObjectTypeName}},@{name='memberofGroup';expression={$obj.IdentityReference}}
     }
-
 }
 
 gatherAdminSDHolder | export-csv $reportpath\AdminSDHolder_permissions -NoTypeInformation

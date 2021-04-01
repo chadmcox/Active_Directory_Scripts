@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.7
+.VERSION 2021.4.1
 
 .GUID 43c7362f-d300-4bf9-a481-622b67e43137
 
@@ -24,33 +24,14 @@ and (iii) to indemnify, hold harmless, and defend Us and Our suppliers from and
 against any claims or lawsuits, including attorneys` fees, that arise or result
 from the use or distribution of the Sample Code..
 
-.TAGS AD AdminCount Groups
-
-.LICENSEURI 
-
-.PROJECTURI 
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS 
-
-.EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+added ability to scan trust and did more cleanup
 0.7 added some other things like critical flag
 0.6 added a bunch of other groups to be checked
 0.2 added cert publisher
 0.1 First go around of the script
 
-.PRIVATEDATA 
-
-#>
-
-#Requires -Module ActiveDirectory
-
-<# 
 
 .DESCRIPTION 
  Collects group member ship changes to enterprise admins, domain admins, 
@@ -58,7 +39,7 @@ from the use or distribution of the Sample Code..
  ones done via sid history
 
 #> 
-Param($reportpath = "$env:userprofile\Documents")
+Param($reportpath = "$env:userprofile\Documents",[switch]$intraforestonly)
 
 
 #https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admin-or-how-to-track-the-group-membership/
@@ -70,26 +51,37 @@ $default_log = "$reportpath\reportOtherPrivilegedGroupMembers_$(get-date -f yyyy
 
 $privileged_groups = @()
 
+if($intraforestonly){
+        $domainstoquery = get-adforest | select -expandproperty domains
+    }else{
+        $domainstoquery = (get-adforest | select -expandproperty domains -pv domain | foreach {get-adtrust -filter * -server $domain} | `
+            select name -Unique).name
+}
+
 
 function getPrivilegedGroups{
     write-host "Gathering Privileged Groups"
     $admincount_groups = @()
     $privileged_groups = @()
 
-    #pulls back the major privileged groups, and all groups with admin count set
-    $admincount_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
+    $admincount_groups = $domainstoquery | foreach{$domain = $_; try{get-adgroup `
                 -filter 'admincount -eq 1 -and iscriticalsystemobject -notlike "*"' `
                  -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
-    $privileged_groups = (get-adforest).domains | foreach{$domain = $_; get-adgroup `
-                -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
-                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
-    #additional groups
-    $privileged_groups += (get-adforest).domains | foreach{$domain = $_; get-adgroup `
-                -filter 'samaccountname -eq "Schema Admins" -or samaccountname -eq "Group Policy Creator Owners" -or samaccountname -eq "Key Admins" -or samaccountname -eq "Enterprise Key Admins" -or samaccountname -eq "Remote Desktop Users" -or samaccountname -eq "Cryptographic Operators"' `
-                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
-    $privileged_groups += (get-adforest).domains | foreach{$domain = $_; get-adgroup `
-                -filter '(iscriticalsystemobject -like "*") -and (samaccountname -ne "Domain Users") -and (samaccountname -ne "Domain Controllers")' `
-                 -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+                 catch{write-host "error connecting to $domain" -ForegroundColor Red}}
+    
+    #pulls back the major privileged groups, and all groups with admin count set
+    $privileged_groups = $domainstoquery | foreach{$domain = $_; write-host "Enumerating $domain"
+        try{get-adgroup -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
+                     -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+                     catch{write-host "error connecting to $domain" -ForegroundColor Red}
+    
+        try{get-adgroup -filter 'samaccountname -eq "Schema Admins" -or samaccountname -eq "Group Policy Creator Owners" -or samaccountname -eq "Key Admins" -or samaccountname -eq "Enterprise Key Admins" -or samaccountname -eq "Remote Desktop Users" -or samaccountname -eq "Cryptographic Operators"' `
+                     -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+                     catch{write-host "error connecting to $domain" -ForegroundColor Red}
+    
+        try{get-adgroup -filter '(iscriticalsystemobject -like "*") -and (samaccountname -ne "Domain Users") -and (samaccountname -ne "Domain Controllers")' `
+                     -server $domain -Properties *,"msDS-ReplValueMetaData" | select $hash_domain,distinguishedname,SamAccountName,objectSid,GroupRelatedTo,viaSidHistory,"msDS-ReplValueMetaData"}
+                     catch{write-host "error connecting to $domain" -ForegroundColor Red}}
 
     #creates a legit list of privileged groups, can easily add a else statement to report on groups with
     #stale admin count
@@ -138,7 +130,7 @@ function searchforobjectwithsidhistory{
     param($group)
     $sid = $group.objectSid
     #$sid 
-    foreach($domain in (get-adforest).domains){
+    foreach($domain in $domainstoquery){
         try{get-adobject -filter {sidhistory -eq $sid} -server $domain -Properties *,"msDS-ReplValueMetaData" | select `
             $hash_domain,distinguishedname,SamAccountName,objectSid, `
             @{name='GroupRelatedTo';expression={$group.samaccountname}}, `
@@ -171,7 +163,7 @@ function enumerateGroupMember{
         $from = $gp.GroupRelatedTo
         $sh = $gp.viaSidHistory
     get-adgroup $group -server $domain -Properties members | select -ExpandProperty members | foreach{
-        foreach($d in (get-adforest).domains){
+        foreach($d in $domainstoquery){
             try{get-adobject -filter {distinguishedname -eq $_} -Properties * -server $d | select `
             @{name='Domain';expression={$domain}},$hash_critical, `
             @{name='GroupRelatedTo';expression={$from}}, `
@@ -184,21 +176,19 @@ function enumerateGroupMember{
      }
 }
 function collectPrivilegedUsers{
-    $results = @()
     if(!($privileged_groups)){
         $privileged_groups = getPrivilegedGroups
     }
     #enumerate found group members
     write-host "Gathering Privileged Groups Members"
     foreach($pg in $privileged_groups){
-        $results += enumerateGroupMember -gp $pg
+        enumerateGroupMember -gp $pg
     }
     write-host "Gathering Privileged Groups Primary Members"
     #enumerate users with changed primary group
     foreach($pg in $privileged_groups){
-        $results += searchforprimarygroupmembership -gp $pg
+        searchforprimarygroupmembership -gp $pg
     }
-    $results | sort domain, group, grouprelatedto,addedtogroup
 }
 
 $critical_groups = @("Administrators","Domain Admins","Enterprise Admins")
@@ -232,8 +222,8 @@ $critical_groups = @("Administrators","Domain Admins","Enterprise Admins")
 
 #collectADPrivilegedGroupChanges | out-gridview
 
-$protected_users_groups = foreach($domain in (get-adforest).domains){get-adgroup "Protected Users"`
-                    -server $domain | select @{name='Domain';expression={$domain}},distinguishedname}
+$protected_users_groups = foreach($domain in $domainstoquery){try{get-adgroup "Protected Users"`
+                    -server $domain | select @{name='Domain';expression={$domain}},distinguishedname}catch{write-host "error connecting to $domain" -ForegroundColor Red}}
 
 $results = collectPrivilegedUsers
 $results | out-gridview

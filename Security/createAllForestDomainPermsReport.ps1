@@ -20,7 +20,7 @@ function enumGroup {
     }
 }
 
-function gatherAdminSDHolder {
+function gatherDomainAcl {
     $results = get-adforest | select -ExpandProperty domains -pv domain | foreach {
         $hash_domain = @{name='Domain';expression={$domain}}
         Get-ADObject "$((get-addomain -Server $domain).DistinguishedName)" -Properties "msds-approx-immed-subordinates",nTSecurityDescriptor -server $domain -pv container | `
@@ -42,4 +42,4 @@ function gatherAdminSDHolder {
     }
 }
 
-gatherAdminSDHolder | export-csv $env:userprofile\documents\domain_permissions.csv -NoTypeInformation
+gatherDomainAcl | export-csv $env:userprofile\documents\domain_permissions.csv -NoTypeInformation

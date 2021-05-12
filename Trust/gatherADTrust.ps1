@@ -42,7 +42,8 @@ $report = "$reportpath\report_ADTrust.csv"
 get-adforest | select -expandproperty domains -PipelineVariable domain | foreach{
 get-adtrust -filter * -Properties * -server $domain -PipelineVariable trust | select `
     @{name='Domain';expression={$domain}},name,securityIdentifier,Created, `
-    Direction,trustType,DisallowTransivity,SelectiveAuthentication,TGTDelegation, `
+    Direction,trustType,DisallowTransivity,SelectiveAuthentication, `
+    SIDFilteringForestAware, SIDFilteringQuarantined,TGTDelegation, `
     TrustAttributes,UsesAESKeys,UsesRC4Encryption,whenCreated,whenchanged,`
     @{name='trustAuthOutgoing';expression={(Get-ADReplicationAttributeMetadata `
         -filter {attributename -eq "trustAuthOutgoing"} -Server (get-addomain $domain).PDCEmulator `

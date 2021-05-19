@@ -289,7 +289,7 @@ write-host "Looking for non domain user primary group assignment"
 getPrimaryGroup | export-csv .\pgsp.tmp -NoTypeInformation
 import-csv @(dir *.tmp) | select ScopeDomain,ScopeSAM,ScopeDN,ScopeSID,RelationShip,Domain,DistinguishedName,sAMAccountName,ObjectClass, `
     objectSid,enabled,permission,pwdLastSet,PwdAgeinDays,LastLogonTimeStamp,CannotBeDelegated,inProtectUsersGroup,PasswordNeverExpires,EncryptionType | `
-        export-csv ".\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv"
+        export-csv ".\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv" -NoTypeInformation
 
 
 dir *.tmp | Compress-Archive -DestinationPath ".\privileged_$(get-date -Format yyyyMMdd).zip" -force

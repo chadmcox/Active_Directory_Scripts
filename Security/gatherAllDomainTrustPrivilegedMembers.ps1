@@ -3,7 +3,7 @@
 #Requires -RunAsAdministrator
 
 <#PSScriptInfo
-.VERSION 2021.5.19
+.VERSION 2021.5.20
 .GUID 5e7bfd24-88b9-4e4d-99fd-c4ffbfcf5be6
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
@@ -43,17 +43,17 @@ function getAllPrivgroups{
         #    catch{write-host "error connecting to $domain" -ForegroundColor Red}
         try{get-adgroup -filter '(admincount -eq 1 -and iscriticalsystemobject -like "*") -or samaccountname -eq "Cert Publishers"' `
             -server $domain -Properties * | select $hash_domain,distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
-                Members,@{name='RelationShip';expression={"​​​​​​​Privileged  Group Membership"}}}
+                Members,@{name='RelationShip';expression={"Privileged Group Membership"}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
     
         try{get-adgroup -filter 'samaccountname -eq "Schema Admins" -or samaccountname -eq "Group Policy Creator Owners" -or samaccountname -eq "Key Admins" -or samaccountname -eq "Enterprise Key Admins" -or samaccountname -eq "Remote Desktop Users" -or samaccountname -eq "Cryptographic Operators"' `
             -server $domain -Properties * | select $hash_domain,distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
-                Members,@{name='RelationShip';expression={"​​​​​​​Privileged  Group Membership"}}}
+                Members,@{name='RelationShip';expression={"Privileged Group Membership"}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
     
         try{get-adgroup -filter '(iscriticalsystemobject -like "*") -and (samaccountname -ne "Domain Users") -and (samaccountname -ne "Users") -and (samaccountname -ne "Domain Controllers")' `
             -server $domain -Properties * | select $hash_domain,distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
-            Members,@{name='RelationShip';expression={"​​​​​​​Privileged  Group Membership"}}}
+            Members,@{name='RelationShip';expression={"Privileged Group Membership"}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
     }
     if(test-path .\pgpo.tmp){
@@ -245,7 +245,7 @@ function expandGroups{
             $script:alreadyEnumerated = @{}
             findObject -odn $_ -domain $group.domain | select @{name='ScopeDomain';expression={$group.domain}}, `
                 @{name='ScopeSAM';expression={$group.SamAccountName}},@{name='ScopeDN';expression={$group.distinguishedname}}, `
-                @{name='ScopeSID';expression={$group.objectsid}},RelationShip, `
+                @{name='ScopeSID';expression={$group.objectsid}},@{name='Relationship';expression={$group.RelationShip}}, `
                 domain,distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}, `
                 @{Name="pwdLastSet";
@@ -289,11 +289,12 @@ write-host "Looking for non domain user primary group assignment"
 getPrimaryGroup | export-csv .\pgsp.tmp -NoTypeInformation
 import-csv @(dir *.tmp) | select ScopeDomain,ScopeSAM,ScopeDN,ScopeSID,RelationShip,Domain,DistinguishedName,sAMAccountName,ObjectClass, `
     objectSid,enabled,permission,pwdLastSet,PwdAgeinDays,LastLogonTimeStamp,CannotBeDelegated,inProtectUsersGroup,PasswordNeverExpires,EncryptionType | `
-        export-csv ".\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv" -NoTypeInformation
+        export-csv ".\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv" -notypeinformation
 
 
 dir *.tmp | Compress-Archive -DestinationPath ".\privileged_$(get-date -Format yyyyMMdd).zip" -force
 dir *.tmp | remove-item -force
 
 
-write-host "Report found here: $reportpath\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv and archive here: $reportpath\privileged_$(get-date -Format yyyyMMdd).zip"
+write-host "Report found here: $reportpath\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv "
+write-host "Archive here: $reportpath\privileged_$(get-date -Format yyyyMMdd).zip"

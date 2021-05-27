@@ -3,7 +3,7 @@
 #Requires -RunAsAdministrator
 
 <#PSScriptInfo
-.VERSION 2021.5.20
+.VERSION 2021.5.19
 .GUID 5e7bfd24-88b9-4e4d-99fd-c4ffbfcf5be6
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
@@ -26,13 +26,17 @@ from the use or distribution of the Sample Code..
 .DESCRIPTION 
  this helps locate most permission end points and expands group membership
 #> 
-Param($reportpath = "$env:userprofile\Documents")
+Param($reportpath = "$env:userprofile\Documents", [switch]$forestonly)
 
 cd $reportpath
 
 function getAllDomains{
-    get-adforest | select -expandproperty domains -PipelineVariable domain | where {get-addomain -server $domain}
-    get-adforest | select -expandproperty domains -PipelineVariable domain | foreach {(get-adtrust -filter * -Server $domain).name} | where {try{get-addomain -server $_}catch{$false}}
+    if($forestonly){
+        get-adforest | select -expandproperty domains -PipelineVariable domain | where {get-addomain -server $domain}
+    }else{
+        get-adforest | select -expandproperty domains -PipelineVariable domain | where {get-addomain -server $domain}
+        get-adforest | select -expandproperty domains -PipelineVariable domain | foreach {$_;(get-adtrust -filter * -Server $domain).name} | where {try{get-addomain -server $_}catch{$false}}
+    }
 }
 
 function getAllPrivgroups{
@@ -56,17 +60,17 @@ function getAllPrivgroups{
             Members,@{name='RelationShip';expression={"Privileged Group Membership"}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
     }
-    if(test-path .\pgpo.tmp){
+    if(test-path .\ADGPOPermissions.csv){
         write-host "attempting: $($_.samaccountname)"
-        import-csv .\pgpo.tmp -pv perm | where {$_.objectClass -eq "Group"} | select domain, samaccountname -unique | foreach{
+        import-csv .\ADGPOPermissions.csv -pv perm | where {$_.objectClass -eq "Group"} | select domain, samaccountname -unique | foreach{
             try{get-adgroup -identity $_.samaccountname -server $_.domain -Properties * | `
                 select @{name='Domain';expression={$perm.domain}},distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
                     Members,@{name='RelationShip';expression={"GPO ACL Group Membership"}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
         }
     }
-    if(test-path .\dacl.tmp){
-        import-csv .\dacl.tmp -pv perm | select domain, samaccountname -unique | foreach{
+    if(test-path .\ADPermissions.csv){
+        import-csv .\ADPermissions.csv -pv perm | select domain, samaccountname -unique | foreach{
             write-host "attempting: $($_.samaccountname)"
             try{get-adgroup -identity $_.samaccountname -server $_.domain -Properties * | `
                 select @{name='Domain';expression={$perm.domain}},distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
@@ -75,8 +79,8 @@ function getAllPrivgroups{
         }
     }
     
-    if(test-path .\dcura.tmp){
-        import-csv .\dcura.tmp -pv perm | select domain, samaccountname -unique | foreach{
+    if(test-path .\ADDCGPOUserRightAssignments.csv){
+        import-csv .\ADDCGPOUserRightAssignments.csv -pv perm | select domain, samaccountname -unique | foreach{
             write-host "attempting: $($_.samaccountname)"
             try{get-adgroup -identity $_.samaccountname -server $_.domain -Properties * | `
                 select @{name='Domain';expression={$perm.domain}},distinguishedname,SamAccountName,objectSid,admincount,iscriticalsystemobject, `
@@ -122,12 +126,13 @@ function getADPermissions{
 }
 function getADAcls{
     
-    getADPermissions | select @{name='ScopeDomain';expression={$_.domain}}, `
-        @{name='ScopeSAM';expression={if ($_.objectType.ToString() -eq '00000000-0000-0000-0000-000000000000') {'All'} Else {$global:schemaIDGUID.Item($_.objectType)}}}, `
-        @{name='ScopeDN';expression={$_.DistinguishedName}},@{name='ScopeSID';expression={}},@{name='RelationShip';expression={"ADPermission"}}, `
+    getADPermissions | select @{name='RelationShip';expression={"AD Permissions"}},@{name='ScopeDomain';expression={$_.domain}}, `
+        @{name='Property';expression={if ($_.objectType.ToString() -eq '00000000-0000-0000-0000-000000000000') {'All'} Else {$global:schemaIDGUID.Item($_.objectType)}}}, `
+        @{name='Permission';expression={$_.ActiveDirectoryRights}}, `
+        @{name='ScopeDN';expression={$_.DistinguishedName}},@{name='ScopeSID';expression={}}, `
         @{name='Domain';expression={if((($_.IdentityReference -split "\\").count -gt 1) -and (($_.IdentityReference -split "\\")[0] -notin "NT AUTHORITY","Everyone","BUILTIN")){($_.IdentityReference -split "\\")[0]}else{$_.domain}}}, @{name='distinguishedname';expression={}}, `
         @{name='samAccountname';expression={if(($_.IdentityReference -split "\\").count -gt 1){($_.IdentityReference -split "\\")[1]}else{$_.IdentityReference}}}, `
-        objectClass, @{name='Permission';expression={$_.ActiveDirectoryRights}}
+        objectClass | where {$_.Permission -notin "ReadProperty","DeleteChild","GenericRead","ListChildren"}
         
 }
 
@@ -136,9 +141,8 @@ function getGpoPermissions{
         write-host "$domain"
         try{Get-GPO -all -domain $domain -Server $domain -pv gpo | foreach{
             Get-GPPermissions -Name $gpo.DisplayName -all -DomainName $gpo.DomainName -server $gpo.domainname -pv gpp
-        } | select @{name='ScopeDomain';expression={$domain}}, `
-                @{name='ScopeSAM';expression={$gpo.DisplayName}},@{name='ScopeDN';expression={$gpo.path}}, `
-                @{name='ScopeSID';expression={}},@{name='RelationShip';expression={"GPOPermission"}}, `
+        } | select @{name='RelationShip';expression={"GPO Permission"}},@{name='ScopeDomain';expression={$domain}}, `
+                @{name='GPOName';expression={$gpo.DisplayName}},@{name='ScopeDN';expression={$gpo.path}}, `
                 @{name='Domain';expression={if($gpp.trustee.domain -eq "NT AUTHORITY"){$domain}else{$gpp.trustee.domain}}},distinguishedname, `
                 @{name='samAccountname';expression={$gpp.trustee.name}}, `
                 @{name='objectClass';expression={$gpp.trustee.SidType}},@{name='objectSid';expression={$gpp.trustee.sid}}, `
@@ -155,15 +159,13 @@ function getDCGPOURA{
     [xml]$report = Get-GPOReport -guid $matches[0] -ReportType Xml -Domain $domain -ErrorAction SilentlyContinue 
     foreach($userright in ($report.GPO.Computer.extensiondata.extension.UserRightsAssignment)){
     $userright | select -ExpandProperty member | foreach{
-    $_.name.'#text' | select @{name='ScopeDomain';expression={$domain}}, `
-                @{name='ScopeSAM';expression={$report.GPO.Name}},@{name='ScopeDN';expression={}}, `
-                @{name='ScopeSID';expression={$matches[0]}}, `
-                @{name='RelationShip';expression={"Domain Controller User Right Assignment"}}, `
+    $_.name.'#text' | select @{name='RelationShip';expression={"Domain Controller GPO User Right Assignment"}}, @{name='ScopeDomain';expression={$domain}}, `
+                @{name='GPOName';expression={$report.GPO.Name}},@{name='ScopeDN';expression={}}, `
                 @{name='Domain';expression={if((($_ -split "\\").count -gt 1) -and (($_ -split "\\")[0] -notin "NT AUTHORITY","Everyone","BUILTIN","NT SERVICE")){
                     ($_ -split "\\")[0]}else{$domain}}}, distinguishedname , `
                 @{name='samAccountname';expression={if(($_ -split "\\").count -gt 1){($_ -split "\\")[1]}else{$_}}}, `
                 @{name='objectClass';expression={}},@{name='objectSid';expression={}}, `
-                @{name='Permission';expression={$userright.Name}}
+                @{name='UserRightAssignment';expression={$userright.Name}} | where {$_.UserRightAssignment -notin "SeChangeNotifyPrivilege","SeNetworkLogonRight","SeMachineAccountPrivilege"}
 }}}}}}}
 
 
@@ -173,33 +175,37 @@ function getsidhistory{
         $objsid = $null; $objsid = $group.objectsid.value
         foreach($domain in $domains){
         write-host "$domain"
-        try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select @{name='ScopeDomain';expression={}}, `
+        try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select `
+                @{name='RelationShip';expression={"SidHistory"}},@{name='ScopeDomain';expression={}}, `
                 @{name='ScopeSAM';expression={$group.SamAccountName}},@{name='ScopeDN';expression={}}, `
-                @{name='ScopeSID';expression={$group.objectsid}},@{name='RelationShip';expression={"SidHistory"}}, `
+                @{name='ScopeSID';expression={$group.objectsid}}, `
                 @{name='Domain';expression={$domain}},distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
         }
+        
     }
 
-    import-csv .\pgm.tmp | select Domain,distinguishedname,samaccountname,objectsid -unique -pv obj | `
+    import-csv .\ADPrivilegedGroupMembers.csv | select Domain,distinguishedname,samaccountname,objectsid -unique -pv obj | `
         where {$_.objectsid -notin $groups.objectsid} | foreach{$objsid = $null; $objsid = $obj.objectsid
             foreach($domain in $domains){
             #write-host "looking for sid: $objsid in $domain"
-            try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select @{name='ScopeDomain';expression={$obj.domain}}, `
+            try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select `
+                @{name='RelationShip';expression={"SidHistory"}},@{name='ScopeDomain';expression={$obj.domain}}, `
                 @{name='ScopeSAM';expression={$obj.SamAccountName}},@{name='ScopeDN';expression={$obj.distinguishedname}}, `
-                @{name='ScopeSID';expression={$obj.objectsid}},@{name='RelationShip';expression={"SidHistory"}}, `
+                @{name='ScopeSID';expression={$obj.objectsid}}, `
                 @{name='Domain';expression={$domain}},distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
     }}
 }
 function getPrimaryGroup{
-    import-csv .\pgm.tmp | select Domain,distinguishedname,samaccountname,objectsid -unique -pv obj | foreach{
+    import-csv .\ADPrivilegedGroupMembers.csv | select Domain,distinguishedname,samaccountname,objectsid -unique -pv obj | foreach{
         $rid = $null; $rid = ($obj.objectsid -split "-")[-1]
-        try{get-adobject -filter {primaryGroupID -eq $rid}  -Properties * -server $obj.domain | select @{name='ScopeDomain';expression={$obj.domain}}, `
+        try{get-adobject -filter {primaryGroupID -eq $rid}  -Properties * -server $obj.domain | select `
+                @{name='RelationShip';expression={"Primary Group"}},@{name='ScopeDomain';expression={$obj.domain}}, `
                 @{name='ScopeSAM';expression={$obj.SamAccountName}},@{name='ScopeDN';expression={$obj.distinguishedname}}, `
-                @{name='ScopeSID';expression={$obj.objectsid}},@{name='RelationShip';expression={"PrimaryGroup"}}, `
+                @{name='ScopeSID';expression={$obj.objectsid}}, `
                 @{name='Domain';expression={$obj.domain}},distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
@@ -208,9 +214,10 @@ function getPrimaryGroup{
         $objsid = $null; $objsid = $group.objectsid.value
         foreach($domain in $domains){
         #write-host "$domain"
-        try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select @{name='ScopeDomain';expression={$group.Domain}}, `
+        try{get-adobject -filter {sidhistory -eq $objsid}  -Properties * -server $domain | select `
+                @{name='RelationShip';expression={"PrimaryGroup"}},@{name='ScopeDomain';expression={$group.Domain}}, `
                 @{name='ScopeSAM';expression={$group.SamAccountName}},@{name='ScopeDN';expression={$group.distinguishedname}}, `
-                @{name='ScopeSID';expression={$group.objectsid}},@{name='RelationShip';expression={"PrimaryGroup"}}, `
+                @{name='ScopeSID';expression={$group.objectsid}}, `
                 @{name='Domain';expression={$domain}},distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}}
             catch{write-host "error connecting to $domain" -ForegroundColor Red}
@@ -218,7 +225,7 @@ function getPrimaryGroup{
     }
 }
 function findObject{
-    param($odn, $domain)
+    param($odn, $domain, $justgroup)
     #Write-Host "Starting $odn in $domain"
     if(!($script:alreadyEnumerated.containskey($odn))){
     $script:alreadyEnumerated.add($odn,$true)
@@ -243,9 +250,10 @@ function expandGroups{
     foreach($group in $groups){
         $group | select -expandProperty members | foreach{
             $script:alreadyEnumerated = @{}
-            findObject -odn $_ -domain $group.domain | select @{name='ScopeDomain';expression={$group.domain}}, `
+            findObject -odn $_ -domain $group.domain | select @{name='Relationship';expression={$group.RelationShip}}, `
+            @{name='ScopeDomain';expression={$group.domain}}, `
                 @{name='ScopeSAM';expression={$group.SamAccountName}},@{name='ScopeDN';expression={$group.distinguishedname}}, `
-                @{name='ScopeSID';expression={$group.objectsid}},@{name='Relationship';expression={$group.RelationShip}}, `
+                @{name='ScopeSID';expression={$group.objectsid}}, `
                 domain,distinguishedname, samaccountname,ObjectClass,objectsid, `
                 @{name='enabled';expression={if($_.useraccountcontrol -band 2){$false}else{$true}}}, `
                 @{Name="pwdLastSet";
@@ -270,31 +278,28 @@ cls
 write-host "Gathering all Domains in Forest and Trusted Domains"
 $domains = getAllDomains | select -unique
 write-host "Gathering GPO Permissions"
-getGpoPermissions | export-csv .\pgpo.tmp -NoTypeInformation
+getGpoPermissions | export-csv .\ADGPOPermissions.csv -NoTypeInformation
 write-host "Gathering GPO Settings"
-getDCGPOURA | export-csv .\dcura.tmp -NoTypeInformation
+getDCGPOURA | export-csv .\ADDCGPOUserRightAssignments.csv -NoTypeInformation
 write-host "Gathering Schema guids to translate AD Acls"
 $global:schemaIDGUID = @{}
 getSchemaGuids
 write-host "Gathering Important AD ACLS"
-getADAcls | export-csv .\dacl.tmp -NoTypeInformation
-write-host "Gathering all ​​​​​​​Privileged  Groups"
+getADAcls | export-csv .\ADPermissions.csv -NoTypeInformation
+write-host "Gathering all ​​​​​​​Privileged  Groups"
 $groups = getAllPrivgroups | select * -unique
-#$groups | export-csv .\gp.tmp -notypeinformation
 write-host "Getting all Group Members"
-expandGroups | export-csv .\pgm.tmp -notypeinformation
+expandGroups | export-csv .\ADPrivilegedGroupMembers.csv -notypeinformation
 write-host "Looking for sid history"
-getsidhistory | export-csv .\pgsid.tmp -NoTypeInformation
+getsidhistory | export-csv .\ADPrivilegedSIDHistory.csv -NoTypeInformation
 write-host "Looking for non domain user primary group assignment"
-getPrimaryGroup | export-csv .\pgsp.tmp -NoTypeInformation
-import-csv @(dir *.tmp) | select ScopeDomain,ScopeSAM,ScopeDN,ScopeSID,RelationShip,Domain,DistinguishedName,sAMAccountName,ObjectClass, `
-    objectSid,enabled,permission,pwdLastSet,PwdAgeinDays,LastLogonTimeStamp,CannotBeDelegated,inProtectUsersGroup,PasswordNeverExpires,EncryptionType | `
-        export-csv ".\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv" -notypeinformation
+getPrimaryGroup | export-csv .\ADPrivilegedPrimaryGroup.csv -NoTypeInformation
 
+import-csv @(dir ad*.csv) | select ScopeDomain,RelationShip,Domain,sAMAccountName -Unique | `
+        export-csv ".\ImportantADObjects_$(get-date -Format yyyyMMdd).csv" -notypeinformation
 
-dir *.tmp | Compress-Archive -DestinationPath ".\privileged_$(get-date -Format yyyyMMdd).zip" -force
-dir *.tmp | remove-item -force
+$groups | export-csv .\ADPrivilegedGroups.csv -notypeinformation
+dir ad*.csv | Compress-Archive -DestinationPath ".\privileged_$(get-date -Format yyyyMMdd).zip" -force
+dir ad*.csv | Remove-Item -force
 
-
-write-host "Report found here: $reportpath\ImportantADPermissions_$(get-date -Format yyyyMMdd).csv "
-write-host "Archive here: $reportpath\privileged_$(get-date -Format yyyyMMdd).zip"
+write-host "Report found here: $reportpath\privileged_$(get-date -Format yyyyMMdd).zip"

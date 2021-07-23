@@ -31,7 +31,7 @@ cd $reportpath
 
 function collectADDomainController{
     get-adforest | select -ExpandProperty domains -pv domain | foreach{
-        Get-ADDomainController -Filter * -server $domain | Where-Object {$_.OperationMasterRoles} | `
+        Get-ADDomainController -Filter * -server $domain |  `
             Select Name,OperatingSystem, Domain, Forest, @{Name="OperationMasterRoles";Expression={[string]$_.OperationMasterRoles}}, site
     }
 }
@@ -148,6 +148,7 @@ function collectADGroups {
         "msExchRecipientTypeDetails","whenchanged","CanonicalName"
     $selectproperties = $properties + @{Name="domain";Expression={$sb.domain}}
     foreach($sb in $searchbases){
+        write-host "Scanning $($sb.distinguishedname)"
         get-adgroup -filter * -Properties $properties -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain `
             -ResultPageSize 256 -ResultSetSize $null | select $selectproperties
     }
@@ -155,6 +156,7 @@ function collectADGroups {
 
 function collectEmptyADGroups{
     foreach($sb in $searchbases){
+        write-host "Scanning $($sb.distinguishedname)"
         get-adgroup -ldapfilter "(!(member=*))" -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain `
             -ResultPageSize 256 -ResultSetSize $null
     }
@@ -300,5 +302,5 @@ collectADAdministrators | export-csv ".\$((get-adforest).name)_adadministrators.
 write-host "Starting collectADPWDPolicy"
 collectADPWDPolicy | export-csv ".\$((get-adforest).name)_adpasswordpolicy.csv" -NoTypeInformation
 
-Compress-Archive -Path ".\$((get-adforest).name)*" -DestinationPath ".\report_$((get-adforest).name).zip"
+Compress-Archive -Path ".\$((get-adforest).name)*" -DestinationPath ".\report_$((get-adforest).name).zip" -force
 write-host "Reports found here: $reportpath"

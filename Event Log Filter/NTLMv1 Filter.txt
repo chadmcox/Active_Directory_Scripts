@@ -1,0 +1,11 @@
+<QueryList>
+<Query Id="0" Path="Security">
+<Select Path="Security">
+(*[EventData[Data[@Name="AuthenticationPackageName"] = "NTLM"]])
+and
+(*[EventData[Data[@Name="LmPackageName"] = "NTLM V1"]])
+and
+(*[System[Provider[@Name='Microsoft-Windows-Security-Auditing'] and (EventID=4624)]])
+</Select>
+</Query>
+</QueryList>

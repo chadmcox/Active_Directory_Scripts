@@ -3,7 +3,7 @@
 #Requires -version 4
 
 <#PSScriptInfo
-.VERSION 2021.7.23
+.VERSION 2021.7.27
 .GUID 9e42b849-031e-4b82-9c77-4a18de5d9870
 .AUTHOR Chad.Cox@microsoft.com
     https://blogs.technet.microsoft.com/chadcox/
@@ -261,7 +261,7 @@ function collectADPrivGroups{
 
 function collectADAdministrators{
     $gc = (Get-ADDomainController -Discover -Service "GlobalCatalog" | select hostname -First 1).HostName
-    foreach($pg in getADPrivgroups){
+    foreach($pg in collectADPrivGroups){
         $pg | select -ExpandProperty members -pv mem | foreach{
         get-adobject -Identity $mem -server "$gc`:3268" | select @{name='Domain';expression={$pg.domain}}, @{name='Group';expression={$pg.samaccountname}}, `
             @{name='Member';expression={$_.name}}, @{name='MemberDN';expression={$_.distinguishedname}},ObjectClass

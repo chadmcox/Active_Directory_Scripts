@@ -105,7 +105,7 @@ function collectADUsers{
     
     foreach($sb in $searchbases){
         write-host "Scanning $($sb.distinguishedname)"
-        try{get-aduser -filter * -Properties $properties -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain  | select $selectproperties}
+        try{get-aduser -filter * -Properties * -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain  | select $selectproperties}
             catch{}
     }
     

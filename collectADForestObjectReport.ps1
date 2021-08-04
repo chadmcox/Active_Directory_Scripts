@@ -149,7 +149,7 @@ function collectADGroups {
     $selectproperties = $properties + @{Name="domain";Expression={$sb.domain}}
     foreach($sb in $searchbases){
         write-host "Scanning $($sb.distinguishedname)"
-        get-adgroup -filter * -Properties $properties -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain `
+        get-adgroup -filter * -Properties * -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain `
             -ResultPageSize 256 -ResultSetSize $null | select $selectproperties
     }
 }

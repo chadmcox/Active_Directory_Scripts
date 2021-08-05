@@ -102,7 +102,8 @@ function collectADUsers{
     "telephoneNumber","extensionAttribute3","extensionAttribute4","c","co","countryCode","extensionAttribute5","extensionAttribute6","physicalDeliveryOfficeName", `
     "extensionAttribute12","title","extensionAttribute11","extensionAttribute13","extensionAttribute8","WhenCreated","CanonicalName", `
     "DistinguishedName","PrimaryGroupID","admincount","sidhistory","PasswordExpired","iscriticalsystemobject","msds-keycredentiallink"
-    
+    $selectproperties = $properties + @{Name="domain";Expression={$sb.domain}}
+
     foreach($sb in $searchbases){
         write-host "Scanning $($sb.distinguishedname)"
         try{get-aduser -filter * -Properties * -searchbase $sb.DistinguishedName -SearchScope OneLevel -server $sb.domain  | select $selectproperties}
@@ -132,10 +133,11 @@ function reportADUsers{
     $WhenCreated = @{n='WhenCreated';e={(Get-Date($_.WhenCreated)).ToString('MM/dd/yyyy')}}
     $WhenChanged = @{n='WhenChanged';e={(Get-Date($_.WhenChanged)).ToString('MM/dd/yyyy')}}
     $spn = @{N="SPN";e={if($_.servicePrincipalName){$True}else{$False}}}
-    
-    collectADUsers | select domain, "msDS-AssignedAuthNPolicySilo","msDS-AssignedAuthNPolicy","Trustedfordelegation","TrustedToAuthForDelegation", `
-    "samaccountname",$thumbnailPhotoSize,"DisplayName","mail",$spn, "UserPrincipalName",$Description,"manager", `
-    "$LastLogonTimeStamp",$WhenChanged, "enabled","AccountExpirationDate",$PwdLastSet,$PwdAge, "telephoneNumber","c","co","countryCode","physicalDeliveryOfficeName", `
+    $selectproperties = $properties + @{Name="domain";Expression={$sb.domain}}
+
+    collectADUsers | select domain, "msDS-AssignedAuthNPolicySilo","msDS-AssignedAuthNPolicy",Trustedfordelegation,TrustedToAuthForDelegation, `
+    samaccountname,$thumbnailPhotoSize,DisplayName,mail,$spn, UserPrincipalName,$Description,manager, `
+    $LastLogonTimeStamp,$WhenChanged, enabled,AccountExpirationDate,$PwdLastSet,$PwdAge, telephoneNumber,c,co,countryCode,physicalDeliveryOfficeName, `
     "title",$WhenCreated,$OU, "DistinguishedName","PrimaryGroupID","admincount",$sidhistory,"PasswordExpired","iscriticalsystemobject", `
     $WH4BProvisioned, $DoesPasswordExpire,$PasswordChangeonNextLogon,$ReversibleEncryption,$UseDesKeyOnly,$CannotChangePassword, `
     $SmartCardRequired,$DoesNotRequirePreAuth,$AccountNotDelegated,$PasswordNotRequired, extensionAttribute*,  msExch*, msRTCSIP*

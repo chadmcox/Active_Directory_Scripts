@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 0.3
 
 .GUID 8580e442-6a53-44cc-b821-2fe2d7fda178
 
@@ -109,20 +109,20 @@ function get-adobjectlocation{
             $splat_select_params = @{'property' = $hash_domain,'Name','DistinguishedName','objectclass','WhenChanged','whencreated',`
                 'gPLink','gPOptions'}
             
-            $script:object_locations += Get-ADObject @splat_params | `
+            Get-ADObject @splat_params | `
                 select-object @splat_select_params
 
-            $script:object_locations += (get-addomain $domain).UsersContainer | `
+            (get-addomain $domain).UsersContainer | `
                 Get-ADObject -server $domain -properties WhenChanged,whencreated | `
                     select-object @splat_select_params
 
-            $script:object_locations += (get-addomain $domain).ComputersContainer | `
+            (get-addomain $domain).ComputersContainer | `
                 Get-ADObject -server $domain -properties WhenChanged,whencreated | `
                     select-object @splat_select_params
         }
     }
     end{
-        $script:object_locations | export-csv $default_log -append -NoTypeInformation
+        
         Write-Progress -Activity "Enumerating Object Locations" -Status "End" -Completed 
     }
 }
@@ -321,7 +321,7 @@ function get-adcomputerdetails{
         $default_log = $default_path + '\report_computer.csv'
         If ($(Try { Test-Path $default_log} Catch { $false })){Remove-Item $default_log -force}
         $stale_date = [DateTime]::Today.AddDays(-90)
-        if(!($script:object_locations)){get-adobjectlocation}
+        if(!($script:object_locations)){$script:object_locations = get-adobjectlocation}
         }
     process{
         write-Debug "Enumerating Computer"
@@ -360,7 +360,7 @@ function get-aduserdetails{
         $default_log = $default_path + '\report_user.csv'
         If ($(Try { Test-Path $default_log} Catch { $false })){Remove-Item $default_log -force}
         $stale_date = [DateTime]::Today.AddDays(-90)
-        if(!($script:object_locations)){get-adobjectlocation}
+        if(!($script:object_locations)){$script:object_locations = get-adobjectlocation}
         }
     process{
         write-Debug "Enumerating User"
@@ -397,14 +397,14 @@ function get-aduserdetails{
 #region quick reference hashtables for calculated properties
 $hash_domain = @{name='Domain';expression={$domain}}
 $hash_isComputerStale = @{Name="Stale";
-    Expression={if(($_.LastLogonTimeStamp -lt $stale_date.ToFileTimeUTC() -or $_.LastLogonTimeStamp -notlike "*") `
-        -and ($_.pwdlastset -lt $stale_date.ToFileTimeUTC() -or $_.pwdlastset -eq 0) `
+    Expression={if(($_.LastLogonTimeStamp -lt $stale_date.ToFileTimeUTC() -or $_.LastLogonTimeStamp -notlike "*") `
+        -and ($_.pwdlastset -lt $stale_date.ToFileTimeUTC() -or $_.pwdlastset -eq 0) `
         -and ($_.enabled -eq $true) -and ($_.whencreated -lt $stale_date) `
         -and ($_.IPv4Address -eq $null) -and ($_.OperatingSystem -like "Windows*") `
         -and (!($_.serviceprincipalname -like "*MSClusterVirtualServer*"))){$True}else{$False}}}
 $hash_isUserStale = @{Name="Stale";
-    Expression={if(($_.LastLogonTimeStamp -lt $stale_date.ToFileTimeUTC() -or $_.LastLogonTimeStamp -notlike "*") `
-        -and ($_.pwdlastset -lt $stale_date.ToFileTimeUTC() -or $_.pwdlastset -eq 0) `
+    Expression={if(($_.LastLogonTimeStamp -lt $stale_date.ToFileTimeUTC() -or $_.LastLogonTimeStamp -notlike "*") `
+        -and ($_.pwdlastset -lt $stale_date.ToFileTimeUTC() -or $_.pwdlastset -eq 0) `
         -and ($_.enabled -eq $true) -and ($_.whencreated -lt $stale_date)){$True}else{$False}}}
 $hash_pwdLastSet = @{Name="pwdLastSet";
     Expression={([datetime]::FromFileTime($_.pwdLastSet))}}
@@ -445,6 +445,8 @@ Measure-Command {get-adsubnetdetails; $function_name = "get-adsubnetdetails"} | 
 write-host "Gathering Replication Connection Details"
 Measure-Command {get-addcrepconnections; $function_name = "get-addcrepconnections"} | `
     select @splat_measure_Params | export-csv $runtime_log -append -NoTypeInformation
+
+$script:object_locations | export-csv "$default_path\report_ou.csv" -append -NoTypeInformation
 
 if(!($skipcomputers)){
 write-host "Gathering Computer Site Details *this will take a while*"

@@ -77,6 +77,26 @@ $hash_isRODC = @{name='isRODC';expression={($account.useraccountcontrol -band $P
 $hash_resourceDelegation = @{name='resourceDelegation';expression={$account.'msDS-AllowedToActOnBehalfOfOtherIdentity' -ne $null}}
 $hash_domain = @{name='Domain';expression={$domain}}
 
+function returnallADTrust{
+    foreach($domain in (get-adforest).domains){
+    write-host "Scanning $domain"
+    get-adtrust -filter {TGTDelegation -eq $false} `
+        -server $domain 
+
+    }
+}
+Function returnallobjectspn{
+    foreach($domain in (get-adforest).domains){
+    write-host "Scanning $domain"
+    
+
+    Get-ADObject -LDAPFilter $filter -SearchScope Subtree `
+        -Properties $propertylist -Server $domain -PipelineVariable account | select `
+        $hash_domain, samaccountname, objectclass, $hash_isDC,$hash_isRODC, $hash_fullDelegation, `
+        $hash_constrainedDelegation,$hash_resourceDelegation 
+}
+}
+
 foreach($domain in (get-adforest).domains){
     write-host "Scanning $domain"
     $trust += get-adtrust -filter {TGTDelegation -eq $false} `
@@ -87,6 +107,8 @@ foreach($domain in (get-adforest).domains){
         $hash_domain, samaccountname, objectclass, $hash_isDC,$hash_isRODC, $hash_fullDelegation, `
         $hash_constrainedDelegation,$hash_resourceDelegation 
 }
+$trust = returnallADTrust
+$objects = returnallobjectspn
 
 $trust_count = ($trust | Measure-Object).count
 $obj_count = ($objects | where {($_.isDC -eq $false) -and ($_.isRODC -eq $false) -and ($_.fullDelegation -eq $true)} | measure-object).count

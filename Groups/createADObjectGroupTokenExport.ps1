@@ -71,7 +71,7 @@ Add-Type @"
         $tokenEntry.SID = $sid.ToString();
         $tokenEntry.Name = $translated;
         $tokenEntry | select @{name='group';expression={$_.Name}}, @{name='object';expression={$adobject.samaccountname}}, `
-            @{name='objectclass';expression={$adobject.objectclass}} | export-csv .\ADGroupMemberExport.csv -NoTypeInformation -Append
+            @{name='objectclass';expression={$adobject.objectclass}},@{name='isSidHistory';expression={$hashsidhistory.ContainsKey($_.SID)}} | export-csv .\ADGroupMemberExport.csv -NoTypeInformation -Append
         $tokenEntry 
     }
 }
@@ -128,6 +128,19 @@ function exportadobjects{
                     @{n='domain';e={$sb.domain}}, distinguishedname, objectclass, samaccountname,objectSid 
     }
 }
+function createsidhistory{
+[cmdletbinding()] 
+    param()
+    if(!($searchbase)){
+        $searchbase = createADSearchBase
+    }
+    foreach($sb in $searchbase){$domain = $sb.domain
+        write-host "exporting sidhistory $($sb.distinguishedname)"
+        get-adobject -ldapFilter "(&(sidhistory=*)(objectCategory=group))" -SearchBase $sb.distinguishedname -SearchScope OneLevel `
+                -Server $sb.domain -Properties samaccountname,sidhistory | select -ExpandProperty sidhistory | select `
+                    @{n='objectsid';e={$_.value}}
+    }
+}
 function createreports{
     [cmdletbinding()] 
     param()
@@ -142,6 +155,10 @@ function createreports{
     }
 }
 $dc = (get-addomaincontroller -Discover).hostname
+$hashsidhistory = @{}
+createsidhistory | foreach{
+    $hashsidhistory.add($_.objectsid,$true)
+}
 exportadobjects | export-csv .\tmpADObjectList.csv -NoTypeInformation
 createreports | export-csv .\ADObjectGroupTokenSummary.csv -NoTypeInformation
 write-host "Results found here: $reportpath"

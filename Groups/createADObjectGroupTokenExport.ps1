@@ -137,7 +137,7 @@ function createsidhistory{
     foreach($sb in $searchbase){$domain = $sb.domain
         write-host "exporting sidhistory $($sb.distinguishedname)"
         get-adobject -ldapFilter "(&(sidhistory=*)(objectCategory=group))" -SearchBase $sb.distinguishedname -SearchScope OneLevel `
-                -Server $sb.domain -Properties samaccountname,sidhistory | select -ExpandProperty sidhistory | select `
+                -Server $sb.domain -Properties samaccountname,sidhistory | select -ExpandProperty sidhistory | where {$_.BinaryLength -ne 16} | select `
                     @{n='objectsid';e={$_.value}}
     }
 }

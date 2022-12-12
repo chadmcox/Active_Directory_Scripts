@@ -1,0 +1,59 @@
+DN,objectClass,ou
+"OU=Domain Controllers,DC=contoso,DC=com",organizationalUnit,Domain Controllers
+"OU=Admin,DC=contoso,DC=com",organizationalUnit,Admin
+"OU=Groups,DC=contoso,DC=com",organizationalUnit,Groups
+"OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Tier 1 Servers
+"OU=Workstations,DC=contoso,DC=com",organizationalUnit,Workstations
+"OU=User Accounts,DC=contoso,DC=com",organizationalUnit,User Accounts
+"OU=Computer Quarantine,DC=contoso,DC=com",organizationalUnit,Computer Quarantine
+"OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Tier 0
+"OU=Tier 1,OU=Admin,DC=contoso,DC=com",organizationalUnit,Tier 1
+"OU=Tier 2,OU=Admin,DC=contoso,DC=com",organizationalUnit,Tier 2
+"OU=Accounts,OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Accounts
+"OU=Groups,OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Groups
+"OU=Service Accounts,OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Service Accounts
+"OU=Devices,OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Devices
+"OU=Tier 0 Servers,OU=Tier 0,OU=Admin,DC=contoso,DC=com",organizationalUnit,Tier 0 Servers
+"OU=Accounts,OU=Tier 1,OU=Admin,DC=contoso,DC=com",organizationalUnit,Accounts
+"OU=Groups,OU=Tier 1,OU=Admin,DC=contoso,DC=com",organizationalUnit,Groups
+"OU=Service Accounts,OU=Tier 1,OU=Admin,DC=contoso,DC=com",organizationalUnit,Service Accounts
+"OU=Devices,OU=Tier 1,OU=Admin,DC=contoso,DC=com",organizationalUnit,Devices
+"OU=Accounts,OU=Tier 2,OU=Admin,DC=contoso,DC=com",organizationalUnit,Accounts
+"OU=Groups,OU=Tier 2,OU=Admin,DC=contoso,DC=com",organizationalUnit,Groups
+"OU=Service Accounts,OU=Tier 2,OU=Admin,DC=contoso,DC=com",organizationalUnit,Service Accounts
+"OU=Devices,OU=Tier 2,OU=Admin,DC=contoso,DC=com",organizationalUnit,Devices
+"OU=Departments,OU=Groups,DC=contoso,DC=com",organizationalUnit,Departments
+"OU=Distribution Groups,OU=Groups,DC=contoso,DC=com",organizationalUnit,Distribution Groups
+"OU=Contacts,OU=Groups,DC=contoso,DC=com",organizationalUnit,Contacts
+"OU=Application,OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Application
+"OU=Collaboration,OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Collaboration
+"OU=Database,OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Database
+"OU=Messaging,OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Messaging
+"OU=Staging,OU=Tier 1 Servers,DC=contoso,DC=com",organizationalUnit,Staging
+"OU=Desktops,OU=Workstations,DC=contoso,DC=com",organizationalUnit,Desktops
+"OU=Kiosks,OU=Workstations,DC=contoso,DC=com",organizationalUnit,Kiosks
+"OU=Laptops,OU=Workstations,DC=contoso,DC=com",organizationalUnit,Laptops
+"OU=Staging,OU=Workstations,DC=contoso,DC=com",organizationalUnit,Staging
+"OU=Enabled Users,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Enabled Users
+"OU=Disabled Users,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Disabled Users
+"OU=Security Groups,OU=Groups,DC=contoso,DC=com",organizationalUnit,Security Groups
+"OU=Test,OU=Groups,DC=contoso,DC=com",organizationalUnit,Test
+"OU=IamCool,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,IamCool
+"OU=Microsoft Exchange Security Groups,DC=contoso,DC=com",organizationalUnit,Microsoft Exchange Security Groups
+"OU=FSPDEMOGROUP,OU=Groups,DC=contoso,DC=com",organizationalUnit,FSPDEMOGROUP
+"OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Migrated
+"OU=Migrated City Groups,OU=Groups,DC=contoso,DC=com",organizationalUnit,Migrated City Groups
+"OU=Toronto,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Toronto
+"OU=Moscow,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Moscow
+"OU=London,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,London
+"OU=Seattle,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Seattle
+"OU=Redmond,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Redmond
+"OU=San Francisco,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,San Francisco
+"OU=New York,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,New York
+"OU=Dallas,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Dallas
+"OU=Denver,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Denver
+"OU=Charolette,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Charolette
+"OU=Minneapolis,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Minneapolis
+"OU=Phoenix,OU=Migrated,OU=User Accounts,DC=contoso,DC=com",organizationalUnit,Phoenix
+"OU=Stale Computers,DC=contoso,DC=com",organizationalUnit,Stale Computers
+"OU=GroupCount,OU=Groups,DC=contoso,DC=com",organizationalUnit,GroupCount
